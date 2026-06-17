@@ -231,9 +231,10 @@ export function PageSpinner() // min-h-screen centrado, Spinner h-8 w-8 text-sec
 
 **`BottomNav`** (`components/layout/bottomnav.tsx`) — `'use client'`:
 - Fixed bottom-0, `bg-surface/95 backdrop-blur-xl`
-- 6 items: `/ (Home)`, `/ingresos (TrendingUp)`, `/gastos (TrendingDown)`, `/deudas (CreditCard)`, `/presupuestos (Target)`, `/ia (MoreHorizontal)`
+- 6 items: `/ (Home)`, `/ingresos (TrendingUp)`, `/gastos (TrendingDown)`, `/deudas (Landmark)`, `/presupuestos (Target)`, `/tarjetas (CreditCard)`
 - Item activo: `bg-secondary-container text-on-secondary-container`
 - Labels en `text-[9px] uppercase tracking-[0.2em]`
+- Nota: `/ia` ya no esta en el nav pero la pagina sigue existiendo en `/ia`
 
 ### Tipografia
 - Labels/etiquetas: `uppercase tracking-[0.25em]` o `tracking-[0.2em]` o `tracking-wider`
@@ -340,7 +341,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | password | String | hasheado con bcrypt |
 | createdAt | DateTime @default(now()) | |
 | updatedAt | DateTime @updatedAt | |
-| Relaciones | incomes, expenses, debts, budgets, goals, payments, accounts, alerts, settings? | |
+| Relaciones | incomes, expenses, debts, budgets, goals, payments, accounts, alerts, settings?, creditCards, cardPurchases | |
 
 **`Account`**
 | Campo | Tipo | Nota |
@@ -361,7 +362,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | name | String @unique | |
 | type | EntryType | INCOME o EXPENSE |
 | createdAt | DateTime | |
-| Relaciones | incomes[], expenses[] | |
+| Relaciones | incomes[], expenses[], cardPurchases[] | |
 
 > Las categorias son **globales** (sin userId). No pertenecen a un usuario especifico. Todos los usuarios comparten el mismo catalogo de categorias.
 
@@ -456,6 +457,37 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | notifications | Boolean @default(true) | |
 | createdAt / updatedAt | DateTime | |
 
+**`CreditCard`**
+| Campo | Tipo | Nota |
+|-------|------|------|
+| id | String @id @default(cuid()) | |
+| userId | String | FK a User |
+| name | String | ej. "Visa Platinum" |
+| bank | String | ej. "Bancolombia" |
+| creditLimit | Float | Cupo total |
+| usedBalance | Float @default(0) | Suma de compras registradas |
+| interestRate | Float | Tasa efectiva mensual en % |
+| dueDay | Int | Dia de vencimiento |
+| cutDay | Int | Dia de corte |
+| currency | String @default("COP") | |
+| createdAt / updatedAt | DateTime | |
+| Relaciones | purchases CardPurchase[] | |
+
+**`CardPurchase`**
+| Campo | Tipo | Nota |
+|-------|------|------|
+| id | String @id @default(cuid()) | |
+| userId | String | FK a User |
+| cardId | String | FK a CreditCard |
+| categoryId | String | FK a Category (solo EXPENSE) |
+| description | String | |
+| totalAmount | Float | Valor total de la compra |
+| installments | Int @default(1) | Numero de cuotas (1=contado) |
+| installmentAmt | Float | totalAmount / installments |
+| paidInstallments | Int @default(0) | Cuotas ya pagadas |
+| date | DateTime | |
+| createdAt | DateTime | |
+
 ---
 
 ## 6. API Routes (todas)
@@ -538,11 +570,24 @@ Todas las rutas requieren `Authorization: Bearer <token>` excepto donde se indic
 | `/api/cuentas` | GET | Si | Lista cuentas del user, orderBy createdAt asc |
 | `/api/cuentas` | POST | Si | Crea cuenta. Body: `{ name, type, balance, currency }` |
 
+### Tarjetas de Credito
+| Ruta | Metodo | Auth | Descripcion |
+|------|--------|------|-------------|
+| `/api/tarjetas` | GET | Si | Lista tarjetas del usuario con purchases, orderBy createdAt desc |
+| `/api/tarjetas` | POST | Si | Crea tarjeta. Body: `{ name, bank, creditLimit, interestRate, dueDay, cutDay, currency? }` |
+| `/api/tarjetas/[id]` | GET | Si | Obtiene tarjeta por id con purchases |
+| `/api/tarjetas/[id]` | PUT | Si | Actualiza tarjeta (verifica ownership) |
+| `/api/tarjetas/[id]` | DELETE | Si | Elimina tarjeta + todas sus compras (transaction) |
+| `/api/tarjetas/[id]/compras` | GET | Si | Lista compras de una tarjeta |
+| `/api/tarjetas/[id]/compras` | POST | Si | Registra compra. Body: `{ description, categoryId, totalAmount, installments, date }`. Calcula installmentAmt = totalAmount/installments, incrementa card.usedBalance |
+| `/api/tarjetas/[id]/compras/[purchaseId]` | DELETE | Si | Elimina compra y decrementa card.usedBalance |
+
 ### Utilidades
 | Ruta | Metodo | Auth | Descripcion |
 |------|--------|------|-------------|
 | `/api/health` | GET | No | Prueba conexion DB con `SELECT 1`. Retorna `{ status, database, timestamp }`. Status 200 ok / 503 error |
-| `/api/seed` | GET | No (key) | Inicializa DB con 15 categorias + 3 usuarios. Query param: `?key=SEED_KEY`. Idempotente: si ya existe alex@finanzasdev.com, retorna sin hacer nada |
+| `/api/seed` | GET | No (key) | Inicializa DB con 16 categorias + 3 usuarios. Query param: `?key=SEED_KEY`. Idempotente: si ya existe alex@finanzasdev.com, retorna sin hacer nada |
+| `/api/seed/categorias` | GET | No (key) | Upsert idempotente de todas las categorias. Safe para produccion, no reinicializa usuarios. Query param: `?key=SEED_KEY` |
 
 ---
 
@@ -631,6 +676,17 @@ Todas las rutas requieren `Authorization: Bearer <token>` excepto donde se indic
 - Estado: `messages: Message[]` donde `Message = { type: 'user' | 'assistant', text: string, time: string }`
 - useRef para scroll automatico al ultimo mensaje
 
+### `/tarjetas` (`app/tarjetas/page.tsx`)
+- `'use client'`, usa `useProtected()`
+- CRUD de CreditCard via `/api/tarjetas` y `/api/tarjetas/[id]`
+- Dos vistas en la misma pagina: lista de tarjetas y detalle de tarjeta
+- Vista lista: `CardSummaryItem` — barra de progreso cupo, disponible, cuota minima estimada, corte/vencimiento
+- Vista detalle: `CardDetail` — stats completos, desglose cuota minima, lista de compras activas
+- Modal nueva/editar tarjeta: name, bank, creditLimit, interestRate, dueDay, cutDay
+- Modal registrar compra: description, categoryId (solo EXPENSE), totalAmount, installments (1-48), date. Preview de cuota mientras escribe
+- Calculo cuota minima: `max(usedBalance * 0.05, cuotasMes + interesMes)`
+- Desglose mostrado: "Cuotas del mes · Interes · Minimo estimado"
+
 ### `/calculadoras` (`app/calculadoras/page.tsx`)
 - `'use client'`, usa `useProtected()`
 - Calculadoras financieras sin llamadas a API (todo local)
@@ -658,7 +714,7 @@ Todas las rutas requieren `Authorization: Bearer <token>` excepto donde se indic
 5. Primas
 6. Pagos no recurrentes
 
-**EXPENSE (9):**
+**EXPENSE (10):**
 1. Arriendo
 2. Transporte
 3. Alimentacion
@@ -668,6 +724,7 @@ Todas las rutas requieren `Authorization: Bearer <token>` excepto donde se indic
 7. Lujos
 8. Tecnologia
 9. Gustos
+10. Mascotas
 
 ### 3 Usuarios creados por el seed
 
@@ -963,13 +1020,16 @@ du -sh /opt/lumina/backups/
 
 ### Lo que esta funcionando (al corte del documento)
 - CRUD completo: ingresos, gastos, deudas, presupuestos, metas de ahorro
-- Dashboard con health score, cash flow chart (Recharts), transacciones recientes
+- **Modulo de Tarjetas de Credito** (`/tarjetas`): CRUD de tarjetas, registro de compras en cuotas, calculo de cuota minima, barra de progreso de cupo
+- Dashboard con health score, cash flow chart (Recharts), transacciones recientes. `totalDebt` incluye `usedBalance` de tarjetas de credito
 - Autenticacion JWT con 7 dias de expiracion
 - 3 cuentas por defecto al registrarse + alerta de bienvenida
-- Filtro de categorias: pagina `/ingresos` filtra categorias `type === 'INCOME'`, pagina `/gastos` filtra `type === 'EXPENSE'`
+- Filtro de categorias: pagina `/ingresos` filtra `INCOME`, pagina `/gastos` y compras de tarjetas filtran `EXPENSE`
 - Calculadora de payoff de deudas (snowball y avalanche) integrada en /deudas
 - Asesor de IA local (sin API externa, basado en keywords y datos del usuario)
 - Calculadoras financieras en /calculadoras
+- 16 categorias globales (incluye nueva "Mascotas" EXPENSE)
+- Endpoint `/api/seed/categorias?key=SEED_KEY` para agregar categorias faltantes en produccion sin reinicializar
 - Docker produccion con Nginx, SSL self-signed, rate limiting
 - Scripts de deploy, backup y restore
 
@@ -1082,6 +1142,8 @@ export default function XPage() {
 - `budgetSchema`: name (min 2), allocated (positive)
 - `goalSchema`: title (min 2), description (min 2), targetAmount (positive), currentAmount (>=0, default 0), targetDate (min 1)
 - `paymentSchema`: debtId (min 1), amount (positive)
+- `creditCardSchema`: name (min 2), bank (min 2), creditLimit (positive), interestRate (positive), dueDay (int 1-31), cutDay (int 1-31), currency (default 'COP')
+- `cardPurchaseSchema`: description (min 2), categoryId (min 1), totalAmount (positive), installments (int 1-48), date (min 1)
 
 ### Estructura de archivos relevantes
 ```
@@ -1100,6 +1162,7 @@ export default function XPage() {
 │   ├── presupuestos/page.tsx   # Budgets + Goals en la misma pagina
 │   ├── ia/page.tsx
 │   ├── calculadoras/page.tsx
+│   ├── tarjetas/page.tsx
 │   └── api/
 │       ├── auth/login/route.ts
 │       ├── auth/register/route.ts
@@ -1113,7 +1176,12 @@ export default function XPage() {
 │       ├── categorias/route.ts
 │       ├── cuentas/route.ts
 │       ├── health/route.ts
-│       └── seed/route.ts
+│       ├── seed/route.ts
+│       ├── seed/categorias/route.ts   # Upsert idempotente de categorias
+│       ├── tarjetas/route.ts
+│       ├── tarjetas/[id]/route.ts
+│       ├── tarjetas/[id]/compras/route.ts
+│       └── tarjetas/[id]/compras/[purchaseId]/route.ts
 ├── components/
 │   ├── ui/
 │   │   ├── field.tsx           # Input, SelectField, Field, FieldLabel, FieldError, Btn

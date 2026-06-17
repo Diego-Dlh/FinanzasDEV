@@ -58,11 +58,31 @@ export const paymentSchema = z.object({
   amount: z.number().positive('El monto debe ser positivo'),
 });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
-export type IncomeInput = z.infer<typeof incomeSchema>;
-export type ExpenseInput = z.infer<typeof expenseSchema>;
-export type DebtInput = z.infer<typeof debtSchema>;
-export type BudgetInput = z.infer<typeof budgetSchema>;
-export type GoalInput = z.infer<typeof goalSchema>;
-export type PaymentInput = z.infer<typeof paymentSchema>;
+export const creditCardSchema = z.object({
+  name:         z.string().min(2, 'El nombre es requerido'),
+  bank:         z.string().min(2, 'El banco es requerido'),
+  creditLimit:  z.number().positive('El cupo debe ser positivo'),
+  interestRate: z.number().positive('La tasa debe ser positiva'),
+  dueDay:       z.number().int().min(1, 'Día inválido').max(31, 'Día inválido'),
+  cutDay:       z.number().int().min(1, 'Día inválido').max(31, 'Día inválido'),
+  currency:     z.string().default('COP'),
+});
+
+export const cardPurchaseSchema = z.object({
+  description:  z.string().min(2, 'La descripción es requerida'),
+  categoryId:   z.string().min(1, 'La categoría es requerida'),
+  totalAmount:  z.number().positive('El monto debe ser positivo'),
+  installments: z.number().int().min(1, 'Mínimo 1 cuota').max(48, 'Máximo 48 cuotas'),
+  date:         z.string().min(1, 'La fecha es requerida'),
+});
+
+export type RegisterInput    = z.infer<typeof registerSchema>;
+export type LoginInput       = z.infer<typeof loginSchema>;
+export type IncomeInput      = z.infer<typeof incomeSchema>;
+export type ExpenseInput     = z.infer<typeof expenseSchema>;
+export type DebtInput        = z.infer<typeof debtSchema>;
+export type BudgetInput      = z.infer<typeof budgetSchema>;
+export type GoalInput        = z.infer<typeof goalSchema>;
+export type PaymentInput     = z.infer<typeof paymentSchema>;
+export type CreditCardInput  = z.infer<typeof creditCardSchema>;
+export type CardPurchaseInput = z.infer<typeof cardPurchaseSchema>;

@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-  const [accounts, monthlyIncomes, monthlyExpenses, debts, goals, recentIncomes, recentExpenses] =
+  const [accounts, monthlyIncomes, monthlyExpenses, debts, goals, recentIncomes, recentExpenses, cards] =
     await Promise.all([
       prisma.account.findMany({ where: { userId } }),
       prisma.income.findMany({
@@ -61,12 +61,14 @@ export async function GET(request: Request) {
         take: 5,
         include: { category: true },
       }),
+      prisma.creditCard.findMany({ where: { userId } }),
     ]);
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
   const totalMonthlyIncome = monthlyIncomes.reduce((s, i) => s + i.amount, 0);
   const totalMonthlyExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
-  const totalDebt = debts.reduce((s, d) => s + d.balance, 0);
+  const cardDebt = cards.reduce((s, c) => s + c.usedBalance, 0);
+  const totalDebt = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
   const netWorth = totalBalance - totalDebt;
   const healthScore = calcHealthScore(
     totalMonthlyIncome,

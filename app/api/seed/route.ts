@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
         { name: 'Lujos',                type: 'EXPENSE' as const },
         { name: 'Tecnología',           type: 'EXPENSE' as const },
         { name: 'Gustos',               type: 'EXPENSE' as const },
+        { name: 'Mascotas',             type: 'EXPENSE' as const },
       ].map((c) => prisma.category.create({ data: c }))
     );
 
@@ -163,7 +164,7 @@ export async function GET(req: NextRequest) {
         'diego@finanzasdev.com → 1004360 (cuenta limpia)',
         'melissa@finanzasdev.com → 108283 (cuenta limpia)',
       ],
-      categorias: `${cats.length} creadas (6 ingresos · 9 gastos)`,
+      categorias: `${cats.length} creadas (6 ingresos · 10 gastos)`,
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

@@ -29,21 +29,23 @@ enum AccountType {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  password     String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  incomes      Income[]
-  expenses     Expense[]
-  debts        Debt[]
-  budgets      Budget[]
-  goals        Goal[]
-  payments     Payment[]
-  accounts     Account[]
-  alerts       Alert[]
-  settings     Setting?
+  id             String         @id @default(cuid())
+  name           String
+  email          String         @unique
+  password       String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  incomes        Income[]
+  expenses       Expense[]
+  debts          Debt[]
+  budgets        Budget[]
+  goals          Goal[]
+  payments       Payment[]
+  accounts       Account[]
+  alerts         Alert[]
+  settings       Setting?
+  creditCards    CreditCard[]
+  cardPurchases  CardPurchase[]
 }
 
 model Account {
@@ -61,12 +63,13 @@ model Account {
 }
 
 model Category {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  type      EntryType
-  createdAt DateTime  @default(now())
-  incomes   Income[]
-  expenses  Expense[]
+  id            String         @id @default(cuid())
+  name          String         @unique
+  type          EntryType
+  createdAt     DateTime       @default(now())
+  incomes       Income[]
+  expenses      Expense[]
+  cardPurchases CardPurchase[]
 }
 
 model Income {
@@ -159,11 +162,45 @@ model Alert {
 }
 
 model Setting {
-  id           String   @id @default(cuid())
-  user         User     @relation(fields: [userId], references: [id])
-  userId       String   @unique
-  darkMode     Boolean  @default(false)
-  notifications Boolean @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String   @unique
+  darkMode      Boolean  @default(false)
+  notifications Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CreditCard {
+  id           String         @id @default(cuid())
+  user         User           @relation(fields: [userId], references: [id])
+  userId       String
+  name         String
+  bank         String
+  creditLimit  Float
+  usedBalance  Float          @default(0)
+  interestRate Float
+  dueDay       Int
+  cutDay       Int
+  currency     String         @default("COP")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  purchases    CardPurchase[]
+}
+
+model CardPurchase {
+  id               String     @id @default(cuid())
+  user             User       @relation(fields: [userId], references: [id])
+  userId           String
+  card             CreditCard @relation(fields: [cardId], references: [id])
+  cardId           String
+  category         Category   @relation(fields: [categoryId], references: [id])
+  categoryId       String
+  description      String
+  totalAmount      Float
+  installments     Int        @default(1)
+  installmentAmt   Float
+  paidInstallments Int        @default(0)
+  date             DateTime
+  createdAt        DateTime   @default(now())
 }
