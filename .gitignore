@@ -12,3 +12,5 @@ coverage/
 .idea/
 .vscode/
 **/*.log
+*.cjs
+tsconfig.tsbuildinfo
