@@ -1,0 +1,42 @@
+# Dependencies — reinstalled inside container
+node_modules
+npm-debug.log*
+
+# Next.js build output
+.next
+out
+
+# Environment & secrets — never in Docker context
+.env
+.env.*
+!.env.example
+
+# Dev/test files
+*.cjs
+*.test.*
+*.spec.*
+coverage
+
+# Git & IDE
+.git
+.gitignore
+.github
+.vscode
+.idea
+.DS_Store
+
+# Docker files (no need to copy into image)
+docker-compose*.yml
+Dockerfile*
+
+# Nginx config (mounted as volume)
+nginx/
+
+# Scripts (run from host, not image)
+scripts/
+
+# Backups
+backups/
+
+# Docs
+README.md
