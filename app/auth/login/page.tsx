@@ -47,7 +47,7 @@ export default function LoginPage() {
           <p className="text-sm text-on-surface-variant">Accede a tu panel financiero personal.</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 rounded-[24px] bg-white p-7 shadow-card border border-outline-variant/10">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5 rounded-[24px] bg-white p-7 shadow-card border border-outline-variant/10">
           {errors.root && (
             <div className="rounded-2xl bg-error-container px-4 py-3 text-sm text-on-error-container">
               {errors.root.message}
