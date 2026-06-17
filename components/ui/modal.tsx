@@ -21,7 +21,7 @@ export function Modal({ title, subtitle, onClose, children }: ModalProps) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-20">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-[6px]"
@@ -47,7 +47,7 @@ export function Modal({ title, subtitle, onClose, children }: ModalProps) {
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto max-h-[72vh] px-6 py-5">
+        <div className="overflow-y-auto px-6 py-5" style={{ maxHeight: 'calc(100dvh - 200px)' }}>
           {children}
         </div>
       </div>
