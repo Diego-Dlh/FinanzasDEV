@@ -1,0 +1,14 @@
+node_modules/
+.next/
+pnpm-lock.yaml
+yarn.lock
+.DS_Store
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+coverage/
+.idea/
+.vscode/
+**/*.log

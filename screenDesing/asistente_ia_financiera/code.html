@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AI Financial Assistant - Personal Finance Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#ee4647",
+                        "primary-container": "#0d1c32",
+                        "tertiary-fixed": "#ffdad7",
+                        "tertiary-fixed-dim": "#ffb3ae",
+                        "secondary": "#006e2a",
+                        "on-secondary": "#ffffff",
+                        "on-surface": "#1b1b1d",
+                        "surface-bright": "#fbf9fb",
+                        "inverse-primary": "#b9c7e4",
+                        "on-tertiary-fixed": "#410004",
+                        "error-container": "#ffdad6",
+                        "surface": "#fbf9fb",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed": "#002108",
+                        "on-primary-container": "#76849f",
+                        "surface-container-low": "#f5f3f5",
+                        "surface-container-highest": "#e4e2e4",
+                        "on-secondary-container": "#00732c",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed-variant": "#39475f",
+                        "inverse-on-surface": "#f2f0f2",
+                        "on-surface-variant": "#44474d",
+                        "on-primary-fixed": "#0d1c32",
+                        "on-tertiary-fixed-variant": "#930015",
+                        "background": "#fbf9fb",
+                        "secondary-container": "#5cfd80",
+                        "outline": "#75777e",
+                        "surface-container": "#efedef",
+                        "tertiary": "#000000",
+                        "on-secondary-fixed-variant": "#00531e",
+                        "secondary-fixed": "#69ff87",
+                        "outline-variant": "#c5c6cd",
+                        "surface-tint": "#515f78",
+                        "surface-dim": "#dbd9db",
+                        "inverse-surface": "#303032",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#e4e2e4",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "surface-container-high": "#eae7ea",
+                        "primary-fixed-dim": "#b9c7e4",
+                        "primary": "#000000",
+                        "tertiary-container": "#410004",
+                        "secondary-fixed-dim": "#3ce36a",
+                        "on-background": "#1b1b1d",
+                        "primary-fixed": "#d6e3ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "stack-sm": "8px",
+                        "stack-md": "16px",
+                        "container-padding": "24px",
+                        "stack-lg": "32px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Inter"],
+                        "numeric-display": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-caps": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "numeric-display": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        .message-bubble-ai {
+            border-bottom-left-radius: 4px;
+        }
+        .message-bubble-user {
+            border-bottom-right-radius: 4px;
+        }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-container-padding py-stack-md">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBkoQffEnMUv-ue9y1AtCNTbhd9ycA76ZCTJqmJPg9__A5iRvUa1m3vZBHdvDkid3VMbaYExEt78sE_7_dTJsYlgN1xwp0HBVNmNG3Jdb7JJfDfLR6HQVIGH6G1UYz7ust8wm-iTxGVEmcu9rZjAC50ng5bWZdrCPKAVO9z-0Yu9AOZj0kb4zb4yh6L6Y97uzzUak7abZ2LAbqnDhxFbk02ca0GOFYEEnEyG9j-5Q0OHHCDw1HpUsr7klPbT7oe8VJEX01sGe4o6Q"/>
+</div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Personal Finance Pro</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:opacity-80 transition-opacity active:scale-95 transition-transform">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 mt-20 mb-32 px-container-padding max-w-4xl mx-auto w-full flex flex-col gap-stack-lg">
+<!-- Welcome Header -->
+<div class="pt-stack-md">
+<span class="font-label-caps text-label-caps text-on-surface-variant tracking-widest">AI FINANCIAL ADVISOR</span>
+<h2 class="font-display-lg text-display-lg mt-unit">Hello, Alex</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-stack-sm">I've analyzed your spending for the week. You're doing great, but I noticed a few trends.</p>
+</div>
+<!-- Chat History -->
+<div class="flex flex-col gap-stack-lg flex-1">
+<!-- AI Recommendation 1 -->
+<div class="flex flex-col items-start gap-stack-sm max-w-[85%]">
+<div class="glass-card p-stack-md rounded-2xl message-bubble-ai shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+<p class="font-body-lg text-body-lg text-on-surface">You spent 15% more on coffee this week compared to your average. That's about $42.50 extra.</p>
+</div>
+<span class="text-[10px] font-label-caps text-outline ml-unit">10:42 AM</span>
+</div>
+<!-- AI Insight Card -->
+<div class="flex flex-col items-start gap-stack-sm max-w-[90%]">
+<div class="glass-card p-0 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgba(0,0,0,0.04)] border border-outline-variant/10">
+<div class="bg-primary-container p-container-padding">
+<div class="flex justify-between items-center mb-stack-md">
+<span class="font-label-caps text-label-caps text-on-primary-container">SUGGESTED BUDGET</span>
+<span class="material-symbols-outlined text-secondary-fixed">auto_awesome</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-primary">Next Month Forecast</p>
+</div>
+<div class="p-container-padding space-y-stack-md">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md text-on-surface-variant">Housing</span>
+<span class="font-numeric-display text-body-lg">$1,200.00</span>
+</div>
+<div class="w-full bg-surface-container h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full" style="width: 45%;"></div>
+</div>
+<div class="flex justify-between items-center pt-unit">
+<span class="font-body-md text-body-md text-on-surface-variant">Savings Goal</span>
+<span class="font-numeric-display text-body-lg text-secondary">+$450.00</span>
+</div>
+<button class="w-full py-stack-md bg-primary text-on-primary font-label-caps text-label-caps rounded-xl hover:opacity-90 transition-all active:scale-[0.98]">
+                            APPLY BUDGET PLAN
+                        </button>
+</div>
+</div>
+<span class="text-[10px] font-label-caps text-outline ml-unit">10:43 AM</span>
+</div>
+<!-- User Response -->
+<div class="flex flex-col items-end gap-stack-sm ml-auto max-w-[85%]">
+<div class="bg-primary-container text-on-primary p-stack-md rounded-2xl message-bubble-user shadow-md">
+<p class="font-body-lg text-body-lg">How can I reduce my debt faster this month?</p>
+</div>
+<span class="text-[10px] font-label-caps text-outline mr-unit">10:45 AM</span>
+</div>
+<!-- AI Response (Typing State/New) -->
+<div class="flex flex-col items-start gap-stack-sm max-w-[85%]">
+<div class="glass-card p-stack-md rounded-2xl message-bubble-ai shadow-[0_4px_20px_rgba(0,0,0,0.05)] border-l-4 border-secondary">
+<p class="font-body-lg text-body-lg text-on-surface">Based on your surplus income, I recommend the **Snowball Method**. You could pay off your 'Credit Card B' 3 months earlier by reallocating your coffee savings.</p>
+<div class="mt-stack-md flex gap-stack-sm flex-wrap">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full font-label-caps text-[10px]">DEBT SNOWBALL</span>
+<span class="bg-surface-container-highest text-on-surface px-3 py-1 rounded-full font-label-caps text-[10px]">3 MONTHS EARLIER</span>
+</div>
+</div>
+<span class="text-[10px] font-label-caps text-outline ml-unit">JUST NOW</span>
+</div>
+</div>
+</main>
+<!-- Sticky Input & Quick Actions Area -->
+<div class="fixed bottom-[80px] left-0 w-full px-container-padding pb-stack-lg z-40 bg-gradient-to-t from-surface via-surface/90 to-transparent">
+<div class="max-w-4xl mx-auto">
+<!-- Quick Action Chips -->
+<div class="flex gap-stack-sm overflow-x-auto pb-stack-md scrollbar-hide">
+<button class="whitespace-nowrap px-stack-md py-2.5 rounded-full border border-outline-variant text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-high transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">account_balance</span> Debt Strategy
+                </button>
+<button class="whitespace-nowrap px-stack-md py-2.5 rounded-full border border-outline-variant text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-high transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">savings</span> Savings Tips
+                </button>
+<button class="whitespace-nowrap px-stack-md py-2.5 rounded-full border border-outline-variant text-on-surface-variant font-label-caps text-label-caps hover:bg-surface-container-high transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">analytics</span> Expense Analysis
+                </button>
+</div>
+<!-- Chat Input Field -->
+<div class="relative flex items-center">
+<input class="w-full h-14 pl-6 pr-16 rounded-2xl bg-surface-container border-none focus:ring-2 focus:ring-primary/20 text-body-lg shadow-sm" placeholder="Ask about your finances..." type="text"/>
+<div class="absolute right-2 flex gap-1">
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary text-on-primary active:scale-95 transition-transform">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface/90 backdrop-blur-xl border-t border-outline-variant/10 pb-8 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-caps text-label-caps mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-caps text-label-caps mt-1">Income</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span class="font-label-caps text-label-caps mt-1">Expenses</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary transition-all" href="#">
+<span class="material-symbols-outlined">credit_score</span>
+<span class="font-label-caps text-label-caps mt-1">Debts</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-xl px-3 py-1.5 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined">menu</span>
+<span class="font-label-caps text-label-caps mt-1">More</span>
+</a>
+</nav>
+<!-- Micro-interaction Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.querySelector('input');
+            const sendBtn = document.querySelector('button .material-symbols-outlined:contains("send")')?.parentElement;
+
+            if (input) {
+                input.addEventListener('focus', () => {
+                    // Subtle atmospheric shift when typing
+                    document.body.style.transition = 'background-color 0.5s ease';
+                });
+            }
+
+            // Simple reveal animation for message bubbles
+            const bubbles = document.querySelectorAll('.glass-card, .bg-primary-container');
+            bubbles.forEach((b, i) => {
+                b.style.opacity = '0';
+                b.style.transform = 'translateY(10px)';
+                setTimeout(() => {
+                    b.style.transition = 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+                    b.style.opacity = '1';
+                    b.style.transform = 'translateY(0)';
+                }, 100 * i);
+            });
+        });
+    </script>
+</body></html>

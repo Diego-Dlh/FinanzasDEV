@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ONE_TIME
+}
+
+enum EntryType {
+  INCOME
+  EXPENSE
+}
+
+enum AccountType {
+  CASH
+  BANK
+  NEQUI
+  DAVIPLATA
+  CARD
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  password     String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  incomes      Income[]
+  expenses     Expense[]
+  debts        Debt[]
+  budgets      Budget[]
+  goals        Goal[]
+  payments     Payment[]
+  accounts     Account[]
+  alerts       Alert[]
+  settings     Setting?
+}
+
+model Account {
+  id          String      @id @default(cuid())
+  user        User        @relation(fields: [userId], references: [id])
+  userId      String
+  name        String
+  type        AccountType
+  balance     Float       @default(0)
+  currency    String      @default("USD")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  incomes     Income[]
+  expenses    Expense[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  type      EntryType
+  createdAt DateTime  @default(now())
+  incomes   Income[]
+  expenses  Expense[]
+}
+
+model Income {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  account    Account   @relation(fields: [accountId], references: [id])
+  accountId  String
+  category   Category  @relation(fields: [categoryId], references: [id])
+  categoryId String
+  name       String
+  amount     Float
+  date       DateTime
+  frequency  Frequency
+  createdAt  DateTime  @default(now())
+}
+
+model Expense {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  account    Account   @relation(fields: [accountId], references: [id])
+  accountId  String
+  category   Category  @relation(fields: [categoryId], references: [id])
+  categoryId String
+  description String
+  amount     Float
+  date       DateTime
+  frequency  Frequency
+  createdAt  DateTime  @default(now())
+}
+
+model Debt {
+  id             String    @id @default(cuid())
+  user           User      @relation(fields: [userId], references: [id])
+  userId         String
+  name           String
+  entity         String
+  balance        Float
+  interestRate   Float
+  minPayment     Float
+  dueDate        DateTime
+  createdAt      DateTime  @default(now())
+  payments       Payment[]
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  debt       Debt     @relation(fields: [debtId], references: [id])
+  debtId     String
+  amount     Float
+  paidAt     DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model Budget {
+  id           String    @id @default(cuid())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String
+  name         String
+  allocated    Float
+  spent        Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Goal {
+  id           String    @id @default(cuid())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String
+  title        String
+  description  String
+  targetAmount Float
+  currentAmount Float   @default(0)
+  targetDate   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Alert {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  message   String
+  type      String
+  read      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+}
+
+model Setting {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String   @unique
+  darkMode     Boolean  @default(false)
+  notifications Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

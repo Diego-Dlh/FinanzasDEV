@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Personal Finance Pro - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-container": "#ee4647",
+                      "primary-container": "#0d1c32",
+                      "tertiary-fixed": "#ffdad7",
+                      "tertiary-fixed-dim": "#ffb3ae",
+                      "secondary": "#006e2a",
+                      "on-secondary": "#ffffff",
+                      "on-surface": "#1b1b1d",
+                      "surface-bright": "#fbf9fb",
+                      "inverse-primary": "#b9c7e4",
+                      "on-tertiary-fixed": "#410004",
+                      "error-container": "#ffdad6",
+                      "surface": "#fbf9fb",
+                      "on-primary": "#ffffff",
+                      "on-secondary-fixed": "#002108",
+                      "on-primary-container": "#76849f",
+                      "surface-container-low": "#f5f3f5",
+                      "surface-container-highest": "#e4e2e4",
+                      "on-secondary-container": "#00732c",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary-fixed-variant": "#39475f",
+                      "inverse-on-surface": "#f2f0f2",
+                      "on-surface-variant": "#44474d",
+                      "on-primary-fixed": "#0d1c32",
+                      "on-tertiary-fixed-variant": "#930015",
+                      "background": "#fbf9fb",
+                      "secondary-container": "#5cfd80",
+                      "outline": "#75777e",
+                      "surface-container": "#efedef",
+                      "tertiary": "#000000",
+                      "on-secondary-fixed-variant": "#00531e",
+                      "secondary-fixed": "#69ff87",
+                      "outline-variant": "#c5c6cd",
+                      "surface-tint": "#515f78",
+                      "surface-dim": "#dbd9db",
+                      "inverse-surface": "#303032",
+                      "on-error": "#ffffff",
+                      "on-tertiary": "#ffffff",
+                      "surface-variant": "#e4e2e4",
+                      "on-error-container": "#93000a",
+                      "error": "#ba1a1a",
+                      "surface-container-high": "#eae7ea",
+                      "primary-fixed-dim": "#b9c7e4",
+                      "primary": "#000000",
+                      "tertiary-container": "#410004",
+                      "secondary-fixed-dim": "#3ce36a",
+                      "on-background": "#1b1b1d",
+                      "primary-fixed": "#d6e3ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "stack-sm": "8px",
+                      "stack-md": "16px",
+                      "container-padding": "24px",
+                      "stack-lg": "32px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "headline-sm": ["Inter"],
+                      "numeric-display": ["Inter"],
+                      "body-md": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "label-caps": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "numeric-display": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #fbf9fb; color: #1b1b1d; }
+        .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(20px); border: 1px solid rgba(0, 0, 0, 0.05); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .progress-ring__circle { transition: stroke-dashoffset 0.35s; transform: rotate(-90deg); transform-origin: 50% 50%; }
+        .wealth-card-gradient { background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface">
+<!-- Top AppBar -->
+<header class="fixed top-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-container-padding py-stack-md">
+<div class="flex items-center gap-stack-md">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/10">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A high-quality 3D rendered avatar of a young professional with short dark hair and a confident smile. The character is set against a soft, minimal grey background, wearing a modern charcoal-colored suit. The visual style is clean and polished, following a high-end digital luxury aesthetic suitable for a premium fintech application." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQ2cGr0ipr0TrGsJY8d6x6UbnGBWBjKMV_UQKRm7Z66pyuqxyD5rTwSfvWBFxCVBCW_DtzJsZ5nsb9JsFWx6QpWo7WJgtREAD9P5uNK-ZwBq6jWzHTxeJBY_ErQJ-ORXX4jUXRl9QnnMU94J0ehiF5ABemSkUDt6OJ8B7aoaf-IDfTjKlP7S9pIqdHFt1VBPnXDy6jO-DV3Dop1wQG0nkyR5h1ejhQ1fwk99dIwSRAnEIBaVTvoOtt3vAiFt78o0Fo9h-BT2Lvpbo"/>
+</div>
+<div>
+<p class="font-body-md text-on-surface-variant text-label-caps">Good Morning,</p>
+<h1 class="font-headline-sm text-headline-sm text-primary">Alex Sterling</h1>
+</div>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-on-surface" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<main class="pt-24 pb-32 px-container-padding max-w-2xl mx-auto space-y-stack-lg">
+<!-- Financial Health Score & Wealth Card Bento -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-stack-md">
+<div class="md:col-span-2 wealth-card-gradient rounded-[24px] p-6 text-white shadow-xl flex flex-col justify-between h-48 relative overflow-hidden group">
+<!-- Subtle mesh light effect -->
+<div class="absolute -top-24 -right-24 w-48 h-48 bg-secondary-container/20 blur-[80px] rounded-full group-hover:scale-125 transition-transform duration-700"></div>
+<div>
+<p class="font-label-caps text-on-primary-container opacity-80 mb-1">Money Available</p>
+<h2 class="font-display-lg text-display-lg">$142,580.00</h2>
+</div>
+<div class="flex justify-between items-end">
+<div class="flex items-center gap-stack-sm">
+<span class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]" data-icon="account_balance">account_balance</span>
+</span>
+<p class="font-body-md opacity-80">Primary Checking</p>
+</div>
+<p class="font-label-caps opacity-60">•••• 8824</p>
+</div>
+</div>
+<div class="glass-card rounded-[24px] p-6 flex flex-col items-center justify-center text-center shadow-sm space-y-stack-sm">
+<div class="relative w-20 h-20">
+<svg class="w-full h-full" viewbox="0 0 100 100">
+<circle class="text-outline-variant/20" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-width="8"></circle>
+<circle class="text-secondary stroke-current progress-ring__circle" cx="50" cy="50" fill="transparent" r="40" stroke-linecap="round" stroke-width="8" style="stroke-dasharray: 251.2; stroke-dashoffset: 37.68;"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="font-headline-sm text-headline-sm text-primary">85</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline-sm text-[16px] text-primary">Health Score</h3>
+<p class="font-body-md text-on-surface-variant text-[12px]">Excellent</p>
+</div>
+</div>
+</section>
+<!-- Horizontal Stats -->
+<section class="space-y-stack-md">
+<h3 class="font-label-caps text-on-surface-variant px-1">Overview</h3>
+<div class="flex gap-stack-md overflow-x-auto no-scrollbar pb-2 -mx-container-padding px-container-padding">
+<div class="min-w-[160px] glass-card p-5 rounded-2xl shadow-sm space-y-stack-sm flex-shrink-0">
+<span class="material-symbols-outlined text-secondary" data-icon="south_west">south_west</span>
+<div>
+<p class="font-label-caps text-on-surface-variant text-[11px]">Income</p>
+<p class="font-headline-sm text-[18px] text-primary">$12,400</p>
+</div>
+</div>
+<div class="min-w-[160px] glass-card p-5 rounded-2xl shadow-sm space-y-stack-sm flex-shrink-0">
+<span class="material-symbols-outlined text-error" data-icon="north_east">north_east</span>
+<div>
+<p class="font-label-caps text-on-surface-variant text-[11px]">Expenses</p>
+<p class="font-headline-sm text-[18px] text-primary">$4,280</p>
+</div>
+</div>
+<div class="min-w-[160px] glass-card p-5 rounded-2xl shadow-sm space-y-stack-sm flex-shrink-0">
+<span class="material-symbols-outlined text-on-tertiary-container" data-icon="credit_card">credit_card</span>
+<div>
+<p class="font-label-caps text-on-surface-variant text-[11px]">Total Debt</p>
+<p class="font-headline-sm text-[18px] text-primary">$2,100</p>
+</div>
+</div>
+<div class="min-w-[160px] glass-card p-5 rounded-2xl shadow-sm space-y-stack-sm flex-shrink-0">
+<span class="material-symbols-outlined text-primary" data-icon="diamond">diamond</span>
+<div>
+<p class="font-label-caps text-on-surface-variant text-[11px]">Net Worth</p>
+<p class="font-headline-sm text-[18px] text-primary">$210K</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Cash Flow Chart Container -->
+<section class="glass-card rounded-[24px] p-6 shadow-sm space-y-stack-lg">
+<div class="flex justify-between items-center">
+<h3 class="font-headline-sm text-[18px] text-primary">Cash Flow</h3>
+<div class="flex items-center gap-stack-sm text-label-caps text-on-surface-variant">
+<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-secondary"></span> Income</span>
+<span class="flex items-center gap-1 ml-2"><span class="w-2 h-2 rounded-full bg-error"></span> Expenses</span>
+</div>
+</div>
+<div class="h-40 flex items-end justify-between gap-2 px-1">
+<!-- Bar 1 -->
+<div class="flex-1 flex flex-col gap-1 items-center">
+<div class="w-full flex flex-col justify-end gap-0.5 h-full">
+<div class="w-full bg-secondary/20 rounded-t-lg transition-all duration-500 hover:bg-secondary/30" style="height: 60%"></div>
+<div class="w-full bg-error/20 rounded-b-lg transition-all duration-500 hover:bg-error/30" style="height: 30%"></div>
+</div>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Mon</span>
+</div>
+<!-- Bar 2 -->
+<div class="flex-1 flex flex-col gap-1 items-center">
+<div class="w-full flex flex-col justify-end gap-0.5 h-full">
+<div class="w-full bg-secondary/20 rounded-t-lg" style="height: 45%"></div>
+<div class="w-full bg-error/20 rounded-b-lg" style="height: 50%"></div>
+</div>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Tue</span>
+</div>
+<!-- Bar 3 -->
+<div class="flex-1 flex flex-col gap-1 items-center">
+<div class="w-full flex flex-col justify-end gap-0.5 h-full">
+<div class="w-full bg-secondary rounded-t-lg shadow-[0_0_15px_rgba(0,110,42,0.2)]" style="height: 85%"></div>
+<div class="w-full bg-error/20 rounded-b-lg" style="height: 10%"></div>
+</div>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Wed</span>
+</div>
+<!-- Bar 4 -->
+<div class="flex-1 flex flex-col gap-1 items-center">
+<div class="w-full flex flex-col justify-end gap-0.5 h-full">
+<div class="w-full bg-secondary/20 rounded-t-lg" style="height: 55%"></div>
+<div class="w-full bg-error rounded-b-lg shadow-[0_0_15px_rgba(186,26,26,0.2)]" style="height: 40%"></div>
+</div>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Thu</span>
+</div>
+<!-- Bar 5 -->
+<div class="flex-1 flex flex-col gap-1 items-center">
+<div class="w-full flex flex-col justify-end gap-0.5 h-full">
+<div class="w-full bg-secondary/20 rounded-t-lg" style="height: 70%"></div>
+<div class="w-full bg-error/20 rounded-b-lg" style="height: 25%"></div>
+</div>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Fri</span>
+</div>
+</div>
+</section>
+<!-- Recent Transactions -->
+<section class="space-y-stack-md">
+<div class="flex justify-between items-center px-1">
+<h3 class="font-headline-sm text-[18px] text-primary">Recent Transactions</h3>
+<button class="font-label-caps text-on-secondary-container">View All</button>
+</div>
+<div class="space-y-stack-sm">
+<!-- Item 1 -->
+<div class="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between hover:bg-surface-container transition-colors group cursor-pointer">
+<div class="flex items-center gap-stack-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="shopping_bag">shopping_bag</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-primary">Apple Store</p>
+<p class="font-body-md text-on-surface-variant">Today, 2:45 PM</p>
+</div>
+</div>
+<p class="font-headline-sm text-[16px] text-error">-$1,299.00</p>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between hover:bg-surface-container transition-colors group cursor-pointer">
+<div class="flex items-center gap-stack-md">
+<div class="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="work">work</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-primary">Monthly Salary</p>
+<p class="font-body-md text-on-surface-variant">Yesterday, 9:00 AM</p>
+</div>
+</div>
+<p class="font-headline-sm text-[16px] text-secondary">+$8,500.00</p>
+</div>
+<!-- Item 3 -->
+<div class="bg-surface-container-low p-4 rounded-2xl flex items-center justify-between hover:bg-surface-container transition-colors group cursor-pointer">
+<div class="flex items-center gap-stack-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="local_cafe">local_cafe</span>
+</div>
+<div>
+<p class="font-body-lg font-semibold text-primary">Blue Bottle Coffee</p>
+<p class="font-body-md text-on-surface-variant">Oct 12, 8:12 AM</p>
+</div>
+</div>
+<p class="font-headline-sm text-[16px] text-error">-$6.50</p>
+</div>
+</div>
+</section>
+</main>
+<!-- FAB -->
+<button class="fixed bottom-28 right-6 w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform z-40">
+<span class="material-symbols-outlined text-[32px]" data-icon="add">add</span>
+</button>
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-0 left-0 w-full z-50 bg-surface/90 backdrop-blur-xl border-t border-outline-variant/10 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex justify-around items-center px-4 py-2 pb-8">
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-xl px-3 py-1.5 active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="home" data-weight="fill" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-label-caps text-[10px]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-caps text-[10px]">Income</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-caps text-[10px]">Expenses</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="credit_score">credit_score</span>
+<span class="font-label-caps text-[10px]">Debts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1.5 hover:text-primary active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+<span class="font-label-caps text-[10px]">More</span>
+</a>
+</nav>
+<script>
+        // Micro-interaction: Update health score progress bar on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const circle = document.querySelector('.progress-ring__circle');
+            if (circle) {
+                const radius = circle.r.baseVal.value;
+                const circumference = radius * 2 * Math.PI;
+                circle.style.strokeDasharray = `${circumference} ${circumference}`;
+                
+                const score = 85;
+                const offset = circumference - (score / 100) * circumference;
+                
+                setTimeout(() => {
+                    circle.style.strokeDashoffset = offset;
+                }, 300);
+            }
+        });
+
+        // Basic scroll effect for TopAppBar
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 20) {
+                header.classList.add('shadow-sm');
+            } else {
+                header.classList.remove('shadow-sm');
+            }
+        });
+    </script>
+</body></html>

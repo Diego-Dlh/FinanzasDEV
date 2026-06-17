@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Personal Finance Pro - Goals &amp; Budgeting</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-tertiary-container": "#ee4647",
+                      "primary-container": "#0d1c32",
+                      "tertiary-fixed": "#ffdad7",
+                      "tertiary-fixed-dim": "#ffb3ae",
+                      "secondary": "#006e2a",
+                      "on-secondary": "#ffffff",
+                      "on-surface": "#1b1b1d",
+                      "surface-bright": "#fbf9fb",
+                      "inverse-primary": "#b9c7e4",
+                      "on-tertiary-fixed": "#410004",
+                      "error-container": "#ffdad6",
+                      "surface": "#fbf9fb",
+                      "on-primary": "#ffffff",
+                      "on-secondary-fixed": "#002108",
+                      "on-primary-container": "#76849f",
+                      "surface-container-low": "#f5f3f5",
+                      "surface-container-highest": "#e4e2e4",
+                      "on-secondary-container": "#00732c",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary-fixed-variant": "#39475f",
+                      "inverse-on-surface": "#f2f0f2",
+                      "on-surface-variant": "#44474d",
+                      "on-primary-fixed": "#0d1c32",
+                      "on-tertiary-fixed-variant": "#930015",
+                      "background": "#fbf9fb",
+                      "secondary-container": "#5cfd80",
+                      "outline": "#75777e",
+                      "surface-container": "#efedef",
+                      "tertiary": "#000000",
+                      "on-secondary-fixed-variant": "#00531e",
+                      "secondary-fixed": "#69ff87",
+                      "outline-variant": "#c5c6cd",
+                      "surface-tint": "#515f78",
+                      "surface-dim": "#dbd9db",
+                      "inverse-surface": "#303032",
+                      "on-error": "#ffffff",
+                      "on-tertiary": "#ffffff",
+                      "surface-variant": "#e4e2e4",
+                      "on-error-container": "#93000a",
+                      "error": "#ba1a1a",
+                      "surface-container-high": "#eae7ea",
+                      "primary-fixed-dim": "#b9c7e4",
+                      "primary": "#000000",
+                      "tertiary-container": "#410004",
+                      "secondary-fixed-dim": "#3ce36a",
+                      "on-background": "#1b1b1d",
+                      "primary-fixed": "#d6e3ff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "16px",
+                      "stack-sm": "8px",
+                      "stack-md": "16px",
+                      "container-padding": "24px",
+                      "stack-lg": "32px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "headline-sm": ["Inter"],
+                      "numeric-display": ["Inter"],
+                      "body-md": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "label-caps": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "numeric-display": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+        .wealth-gradient {
+            background: linear-gradient(135deg, #0d1c32 0%, #39475f 100%);
+        }
+        .progress-ring {
+            transition: stroke-dashoffset 0.8s ease-out;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c5c6cd;
+            border-radius: 10px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-50 bg-surface/80 dark:bg-background/80 backdrop-blur-xl flex justify-between items-center px-container-padding py-stack-md w-full">
+<div class="flex items-center gap-stack-md">
+<img alt="User Profile" class="w-10 h-10 rounded-full border-2 border-primary-fixed" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0fMozp2AV6D99kg_2cSzd4Z-MCKNuckvBQfRus_tEdEP4yc-8XAP-GXaOHdL-QI3XIfWjbG_Xim6bqLgqhpGCnm5ax8foH3FQw0ulmcT7mBFEFlsu6VLjIayuR2-E2DtCUGb_-uyJdFMJ_vIfpv_kB6DwZbkW0acujRpO4K8vZAkCIGaQdqHYG1TlJXa1j0EeregLhEBstEZ8n3eHL5X8eDlU4Mkce4fRPpZ7TMFDol4SuixrYWvrQ3nU4AWjwEmTggF68VOzyUM"/>
+<span class="font-headline-md text-headline-md font-bold text-primary">Personal Finance Pro</span>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="material-symbols-outlined text-primary hover:opacity-80 transition-opacity p-2 rounded-full hover:bg-surface-container-high" data-icon="notifications">notifications</button>
+</div>
+</header>
+<main class="max-w-4xl mx-auto px-container-padding pt-stack-lg space-y-stack-lg">
+<!-- Welcome Hero & Wealth Card -->
+<section class="space-y-stack-md">
+<div class="flex flex-col gap-unit">
+<h1 class="font-display-lg text-display-lg text-primary">Your Financial Future</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Stay focused. You're 12% closer to your goals this month.</p>
+</div>
+<!-- Main Wealth Card -->
+<div class="wealth-gradient p-container-padding rounded-[24px] text-white flex flex-col justify-between h-48 relative overflow-hidden shadow-xl">
+<div class="absolute -right-12 -top-12 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
+<div class="flex justify-between items-start relative z-10">
+<div class="space-y-unit">
+<p class="font-label-caps text-label-caps opacity-70 uppercase tracking-widest">Total Savings</p>
+<h2 class="font-numeric-display text-numeric-display">$42,950.00</h2>
+</div>
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold">+2.4%</span>
+</div>
+<div class="flex items-center gap-stack-md relative z-10">
+<div class="flex -space-x-3">
+<img class="w-8 h-8 rounded-full border-2 border-[#0d1c32]" data-alt="Close-up of a premium, brushed metal credit card with minimalist branding sitting on a polished dark wood desk under warm focused spotlighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvlTvWd5CxKEAAeH40-69gM8wSvPAeZapytR1RSbIvBfqAxPj37HHoHOB3Num7Lk8RMVt_Oq8bt36uFkNdCyybEJAmvTj6ia6Mw8PiV-2NrF49rm3MwpCLNJdRH7jZBvnBIGfu00LFDf8Ml409AcwaDeN543OmIdGddiRX06YOinXxgYxMBeHuRa_xEbXXpSZGmWZbhqHDJhdxNm4Mx-aVVFxLDwLzDWd76mh140bd8cCLTBUDTVtt8274FGZWYf8mF9M6g3LBM_0"/>
+<img class="w-8 h-8 rounded-full border-2 border-[#0d1c32]" data-alt="Modern digital interface showing a collection of sleek banking cards floating in a dark, high-contrast three-dimensional space with soft blue backlighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJm0jjdz1-bWWIRUXs2D5Xf3444Zllkao8pdwX-Uw0-UAz1BtbqcoYvx3OBM0wLROlmoCPb8_rpciXv-sjQfiGf2CZgC48DAWnWkgODpXLCd75kyn7e6DJMWOYye1ugO34W6q0CHcTkzY-rxZeU10LoWxLZ8cwOrs97wxCcvkRhc9EPfawIkp_yShIbSNAT6bJLfFYrcJ3HYTGrP02OwXalzfTOcRK6hoETDwZXHgWsd24UEJqSSKNYI2mYWpQ8bvEyli_2Vjdybc"/>
+</div>
+<p class="font-body-md text-body-md opacity-80">Linked Accounts (4)</p>
+</div>
+</div>
+</section>
+<!-- Budget Section -->
+<section class="space-y-stack-md">
+<div class="flex justify-between items-end">
+<h3 class="font-headline-sm text-headline-sm text-primary">Monthly Budget</h3>
+<button class="text-on-secondary-container font-semibold text-sm hover:underline">Edit Budget</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+<!-- Budget Item: Food (Yellow Warning) -->
+<div class="glass-card p-stack-md rounded-xl space-y-stack-sm">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-amber-500 bg-amber-50 p-2 rounded-lg" data-icon="restaurant">restaurant</span>
+<span class="font-body-lg text-body-lg font-semibold">Food &amp; Dining</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface-variant">$420 / $500</span>
+</div>
+<div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-amber-400 rounded-full" style="width: 84%"></div>
+</div>
+<p class="text-[11px] text-amber-600 font-medium">84% consumed. Watch out for weekend dining!</p>
+</div>
+<!-- Budget Item: Transport (Green Safe) -->
+<div class="glass-card p-stack-md rounded-xl space-y-stack-sm">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-secondary bg-secondary-container/20 p-2 rounded-lg" data-icon="directions_car">directions_car</span>
+<span class="font-body-lg text-body-lg font-semibold">Transport</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface-variant">$110 / $300</span>
+</div>
+<div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 36%"></div>
+</div>
+<p class="text-[11px] text-secondary font-medium">Under budget. Great job using public transit!</p>
+</div>
+<!-- Budget Item: Entertainment (Red Danger) -->
+<div class="glass-card p-stack-md rounded-xl space-y-stack-sm">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-error bg-error-container/20 p-2 rounded-lg" data-icon="movie">movie</span>
+<span class="font-body-lg text-body-lg font-semibold">Leisure</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface-variant">$245 / $200</span>
+</div>
+<div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-error rounded-full" style="width: 100%"></div>
+</div>
+<p class="text-[11px] text-error font-medium">Over budget by $45. Consider pausing subscriptions.</p>
+</div>
+<!-- Budget Item: Shopping (Blue Info) -->
+<div class="glass-card p-stack-md rounded-xl space-y-stack-sm">
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-stack-sm">
+<span class="material-symbols-outlined text-primary-fixed-variant bg-primary-fixed/20 p-2 rounded-lg" data-icon="shopping_bag">shopping_bag</span>
+<span class="font-body-lg text-body-lg font-semibold">Shopping</span>
+</div>
+<span class="font-body-md text-body-md text-on-surface-variant">$150 / $400</span>
+</div>
+<div class="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary-fixed-variant rounded-full" style="width: 37%"></div>
+</div>
+<p class="text-[11px] text-on-primary-fixed-variant font-medium">Room for that jacket you wanted.</p>
+</div>
+</div>
+</section>
+<!-- Financial Goals Section -->
+<section class="space-y-stack-md">
+<div class="flex justify-between items-end">
+<h3 class="font-headline-sm text-headline-sm text-primary">Financial Goals</h3>
+<button class="bg-primary text-on-primary px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-transform active:scale-95">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span> New Goal
+                </button>
+</div>
+<div class="flex flex-col gap-stack-md">
+<!-- Goal Card: Emergency Fund -->
+<div class="glass-card overflow-hidden rounded-[24px] flex flex-col md:flex-row">
+<div class="md:w-1/3 h-48 md:h-auto relative">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover" data-alt="A macro shot of a single green sprout growing out of a pile of gold coins in a dark, moody environment. Soft golden light hits the seedling from above, symbolizing financial growth and security. The aesthetic is professional, clean, and optimistic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCT9lfCsFIp_h03azem9B4u4wOObxtyIWaeM1D45cJfBGHGJAohc55fxg4vWU6vJ2b0vCT7lFFjL0IWqpA7XYQDeezzo5Kajb_W2yziekap6t-fGiShwdRKgn4lgQN1UWPcWFs4SaMMrWRKzYVS7IIbmepDYlWuloyQAIjbYFqR3jzpxFgJs0kGV7-8_fJX-FRrY1bM-f0srC8HMouEtbodF88VgvkF2-zi9K_7-YsAx7OslsIKhOlimGyr7A2FeEOJBA3kbt8755E"/>
+<div class="absolute bottom-4 left-4 z-20">
+<span class="px-2 py-1 bg-secondary text-on-secondary rounded text-[10px] font-bold uppercase">On Track</span>
+</div>
+</div>
+<div class="flex-1 p-container-padding flex flex-col justify-between">
+<div class="space-y-unit">
+<h4 class="font-headline-sm text-headline-sm">Emergency Fund</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Building a 6-month safety net for peace of mind.</p>
+</div>
+<div class="mt-stack-md space-y-stack-sm">
+<div class="flex justify-between text-sm font-semibold">
+<span>75% Completed</span>
+<span>$15,000 / $20,000</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 75%"></div>
+</div>
+<div class="flex justify-between items-center pt-unit">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-xs">3 months remaining</span>
+</div>
+<span class="text-xs font-bold text-primary">Monthly Contribution: $1,200</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Goal Card: New Car -->
+<div class="glass-card overflow-hidden rounded-[24px] flex flex-col md:flex-row">
+<div class="md:w-1/3 h-48 md:h-auto relative">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover" data-alt="Minimalist photograph of a sleek, high-end electric vehicle steering wheel and dashboard in low-key lighting. The atmosphere is luxurious and technologically advanced, with soft reflections of city lights on the glass surfaces." src="https://lh3.googleusercontent.com/aida-public/AB6AXuADx9RiTKLYjlo7qprZ3ovXz5dhSdprJ4_O-yF6lXfelPXkx5ZGslPVvjRdJ9Ci2NKrmCD3lnlAL_u6nU_RSjaks7fP3IfCrXQ2a_67qoRDqh-6Lc5hCSk_NYpO39yaCksqyrsQlbThAdJCKRRnLHmN8h3WhtbOKyYYuBGaVEFd_Is9LX26zlG38oM6E-Fze4-vHuKEc1unmy4Mr6_kjrmdQVhfJfGSS-q23Yk-CiPrVBesMJ9ZceLMs0C2_AGGKxZ8JHd05NcroPc"/>
+<div class="absolute bottom-4 left-4 z-20">
+<span class="px-2 py-1 bg-amber-500 text-white rounded text-[10px] font-bold uppercase">Delayed</span>
+</div>
+</div>
+<div class="flex-1 p-container-padding flex flex-col justify-between">
+<div class="space-y-unit">
+<h4 class="font-headline-sm text-headline-sm">Model 3 Fund</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Saving for a down payment on a new electric sedan.</p>
+</div>
+<div class="mt-stack-md space-y-stack-sm">
+<div class="flex justify-between text-sm font-semibold">
+<span>32% Completed</span>
+<span>$8,000 / $25,000</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-amber-400 rounded-full" style="width: 32%"></div>
+</div>
+<div class="flex justify-between items-center pt-unit">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-xs">14 months remaining</span>
+</div>
+<span class="text-xs font-bold text-primary">Monthly Contribution: $500</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Goal Card: Travel -->
+<div class="glass-card overflow-hidden rounded-[24px] flex flex-col md:flex-row">
+<div class="md:w-1/3 h-48 md:h-auto relative">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover" data-alt="Cinematic wide shot of a peaceful blue alpine lake surrounded by snow-capped mountains at dawn. The water is perfectly still, reflecting the soft pink and orange hues of the sky. The image evokes a sense of tranquil travel and adventure." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmdVD4_vf2wHBlhsQVuLP9_cezyw3grekbbBYOOLMFy1-ro4I00MDR3gmN5DaqpntThp8v1NVdO2LlP7HEMwhEeGRqCamVbjBmqWbSxIWabC25Bb2Sgv0VFGgtbfFp9VtBHwFIo33RImAuQ6UXCIrpr_G6iew4uMSGm97vTFkTEeVXMqflyEIRtOG2wL-C9Knrn3VjucbqS6BGJj5JGzLpFsoOinOWM_oF75GE6z-7uQsevvBCYduH52CQ1RQues6Be7qw03D9Z1c"/>
+<div class="absolute bottom-4 left-4 z-20">
+<span class="px-2 py-1 bg-secondary text-on-secondary rounded text-[10px] font-bold uppercase">Nearly There!</span>
+</div>
+</div>
+<div class="flex-1 p-container-padding flex flex-col justify-between">
+<div class="space-y-unit">
+<h4 class="font-headline-sm text-headline-sm">Switzerland Trip</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Winter vacation in the Alps. Flights and lodging.</p>
+</div>
+<div class="mt-stack-md space-y-stack-sm">
+<div class="flex justify-between text-sm font-semibold">
+<span>92% Completed</span>
+<span>$4,600 / $5,000</span>
+</div>
+<div class="h-3 w-full bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary rounded-full" style="width: 92%"></div>
+</div>
+<div class="flex justify-between items-center pt-unit">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span>
+<span class="text-xs">22 days remaining</span>
+</div>
+<span class="text-xs font-bold text-primary">Monthly Contribution: $400</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Motivational Quote Section -->
+<div class="py-stack-lg flex flex-col items-center text-center space-y-stack-sm">
+<span class="material-symbols-outlined text-primary-fixed-variant scale-150 mb-stack-sm" data-icon="format_quote">format_quote</span>
+<p class="font-headline-sm italic text-on-surface-variant max-w-lg">"A budget is telling your money where to go instead of wondering where it went."</p>
+<p class="font-label-caps text-label-caps opacity-60">— John Maxwell</p>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface/90 dark:bg-background/90 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.05)] pb-8">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-3 py-1.5 hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-caps text-label-caps">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-3 py-1.5 hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-caps text-label-caps">Income</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-3 py-1.5 hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-caps text-label-caps">Expenses</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-xl px-3 py-1.5 shadow-sm active:scale-90 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="credit_score" data-weight="fill">credit_score</span>
+<span class="font-label-caps text-label-caps">Debts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline px-3 py-1.5 hover:text-primary transition-all active:scale-90" href="#">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+<span class="font-label-caps text-label-caps">More</span>
+</a>
+</nav>
+<!-- Floating Action Button (FAB) contextually for adding entries -->
+<button class="fixed bottom-28 right-container-padding w-14 h-14 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-40">
+<span class="material-symbols-outlined" data-icon="add_chart">add_chart</span>
+</button>
+<script>
+        // Micro-interaction for goal cards on scroll/load
+        document.addEventListener('DOMContentLoaded', () => {
+            const cards = document.querySelectorAll('.glass-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = `all 0.6s cubic-bezier(0.23, 1, 0.32, 1) ${index * 0.1}s`;
+                
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 100);
+            });
+        });
+
+        // Add active states to buttons
+        const interactables = document.querySelectorAll('.active\\:scale-95, .active\\:scale-90');
+        interactables.forEach(item => {
+            item.addEventListener('mousedown', () => item.style.transform = item.classList.contains('active:scale-95') ? 'scale(0.95)' : 'scale(0.9)');
+            item.addEventListener('mouseup', () => item.style.transform = 'scale(1)');
+            item.addEventListener('mouseleave', () => item.style.transform = 'scale(1)');
+        });
+    </script>
+</body></html>
