@@ -49,7 +49,7 @@ export default function IncomesPage() {
         api.get<{ accounts: Account[] }>('/cuentas'),
       ]);
       setIncomes(inc.incomes);
-      setCategories(cat.categories);
+      setCategories(cat.categories.filter((c) => c.type === 'INCOME'));
       setAccounts(acc.accounts);
     } catch (e) {
       setError((e as Error).message);

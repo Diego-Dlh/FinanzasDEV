@@ -50,7 +50,7 @@ export default function ExpensesPage() {
         api.get<{ accounts: Account[] }>('/cuentas'),
       ]);
       setExpenses(exp.expenses);
-      setCategories(cat.categories);
+      setCategories(cat.categories.filter((c) => c.type === 'EXPENSE'));
       setAccounts(acc.accounts);
     } catch (e) {
       setError((e as Error).message);
