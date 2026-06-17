@@ -84,5 +84,15 @@ export type DebtInput        = z.infer<typeof debtSchema>;
 export type BudgetInput      = z.infer<typeof budgetSchema>;
 export type GoalInput        = z.infer<typeof goalSchema>;
 export type PaymentInput     = z.infer<typeof paymentSchema>;
-export type CreditCardInput  = z.infer<typeof creditCardSchema>;
-export type CardPurchaseInput = z.infer<typeof cardPurchaseSchema>;
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Ingresa tu contraseña actual'),
+  newPassword:     z.string().min(6, 'Mínimo 6 caracteres'),
+  confirmPassword: z.string().min(1, 'Confirma la nueva contraseña'),
+}).refine((d) => d.newPassword === d.confirmPassword, {
+  message: 'Las contraseñas no coinciden',
+  path: ['confirmPassword'],
+});
+
+export type CreditCardInput      = z.infer<typeof creditCardSchema>;
+export type CardPurchaseInput     = z.infer<typeof cardPurchaseSchema>;
+export type ChangePasswordInput   = z.infer<typeof changePasswordSchema>;

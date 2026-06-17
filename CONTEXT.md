@@ -231,10 +231,10 @@ export function PageSpinner() // min-h-screen centrado, Spinner h-8 w-8 text-sec
 
 **`BottomNav`** (`components/layout/bottomnav.tsx`) — `'use client'`:
 - Fixed bottom-0, `bg-surface/95 backdrop-blur-xl`
-- 6 items: `/ (Home)`, `/ingresos (TrendingUp)`, `/gastos (TrendingDown)`, `/deudas (Landmark)`, `/presupuestos (Target)`, `/tarjetas (CreditCard)`
+- 7 items: `/ (Home)`, `/ingresos (TrendingUp)`, `/gastos (TrendingDown)`, `/deudas (Landmark)`, `/presupuestos (Target)`, `/tarjetas (CreditCard)`, `/ia (MoreHorizontal)`
 - Item activo: `bg-secondary-container text-on-secondary-container`
-- Labels en `text-[9px] uppercase tracking-[0.2em]`
-- Nota: `/ia` ya no esta en el nav pero la pagina sigue existiendo en `/ia`
+- Labels en `text-[8px] uppercase tracking-[0.15em]` (reducido vs original para caber los 7 items)
+- Iconos `size={17}`, padding reducido `px-2 py-1.5`
 
 ### Tipografia
 - Labels/etiquetas: `uppercase tracking-[0.25em]` o `tracking-[0.2em]` o `tracking-wider`
