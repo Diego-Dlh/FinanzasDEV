@@ -18,7 +18,25 @@ export async function POST(request: Request) {
 
   const hashedPassword = await hashPassword(password);
   const user = await prisma.user.create({
-    data: { name, email, password: hashedPassword, settings: { create: { darkMode: false, notifications: true } } },
+    data: {
+      name,
+      email,
+      password: hashedPassword,
+      settings: { create: { darkMode: false, notifications: true } },
+      accounts: {
+        create: [
+          { name: 'Cuenta Principal', type: 'BANK', balance: 0, currency: 'COP' },
+          { name: 'Efectivo',          type: 'CASH', balance: 0, currency: 'COP' },
+          { name: 'Ahorro',            type: 'BANK', balance: 0, currency: 'COP' },
+        ],
+      },
+      alerts: {
+        create: {
+          message: `¡Bienvenido a Lumina Finance, ${name.split(' ')[0]}! Comienza registrando tus ingresos.`,
+          type: 'SPENDING_ALERT',
+        },
+      },
+    },
   });
 
   return NextResponse.json({ id: user.id, name: user.name, email: user.email }, { status: 201 });
