@@ -9,6 +9,8 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB}
       POSTGRES_USER:     ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -56,6 +58,7 @@ services:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - nginx_logs:/var/log/nginx
+      - certbot_webroot:/var/www/certbot:ro
     depends_on:
       app:
         condition: service_healthy
@@ -67,6 +70,8 @@ volumes:
     name: lumina_postgres_data
   nginx_logs:
     name: lumina_nginx_logs
+  certbot_webroot:
+    name: lumina_certbot_webroot
 
 networks:
   lumina_net:
