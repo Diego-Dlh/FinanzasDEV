@@ -4,7 +4,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { PageSpinner } from '@/components/ui/spinner';
 import {
-  Sparkles, Github, Shield, TrendingUp, TrendingDown, CreditCard,
+  Sparkles, GitBranch, Shield, TrendingUp, TrendingDown, CreditCard,
   Target, Landmark, BarChart2, History, Cpu, Globe,
 } from 'lucide-react';
 
@@ -149,7 +149,7 @@ export default function AboutPage() {
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 rounded-xl bg-surface-container-high px-4 py-2.5 text-sm font-medium text-on-surface hover:bg-surface-container-highest transition w-fit"
               >
-                <Github size={15} />
+                <GitBranch size={15} />
                 Diego-Dlh · GitHub
               </a>
             </div>
@@ -176,7 +176,7 @@ export default function AboutPage() {
 
             <div className="rounded-[24px] bg-primary/10 border border-primary/20 p-5 space-y-2">
               <div className="flex items-center gap-2">
-                <Github size={16} className="text-primary" />
+                <GitBranch size={16} className="text-primary" />
                 <p className="font-semibold text-sm text-on-surface">Open Source — v1.6</p>
               </div>
               <p className="text-xs text-on-surface-variant leading-relaxed">
