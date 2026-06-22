@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, TrendingUp, TrendingDown, Landmark, Target, CreditCard, MoreHorizontal, History } from 'lucide-react';
+import { Home, TrendingUp, TrendingDown, Landmark, Target, CreditCard, MoreHorizontal, History, Info } from 'lucide-react';
 
 const items = [
   { href: '/',             label: 'Inicio',    icon: Home },
@@ -12,6 +12,7 @@ const items = [
   { href: '/presupuestos', label: 'Metas',     icon: Target },
   { href: '/tarjetas',     label: 'Tarjetas',  icon: CreditCard },
   { href: '/ia',           label: 'IA',        icon: MoreHorizontal },
+  { href: '/about',        label: 'Acerca de', icon: Info },
 ];
 
 export function BottomNav() {
