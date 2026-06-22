@@ -1,6 +1,6 @@
 # LUMINA FINANCE — CONTEXTO COMPLETO DEL PROYECTO
 
-> Última actualización: 2026-06-22. Documento de referencia para continuar desarrollo en nuevas sesiones de Claude.
+> Última actualización: 2026-06-22 (sesión 2). Documento de referencia para continuar desarrollo en nuevas sesiones de Claude.
 
 ---
 
@@ -34,6 +34,8 @@
 | lucide-react | ^1.20.0 |
 | recharts | ^3.8.1 |
 
+**IMPORTANTE lucide-react v1.20.0:** El ícono `Github` NO existe. Usar `ExternalLink` como alternativa para links externos.
+
 **Infraestructura:** PostgreSQL 15-alpine · Docker Compose · Nginx 1.25-alpine · Node >=20
 
 ---
@@ -55,11 +57,11 @@
 - Activado con clase `html.dark`
 - `globals.css` tiene bloque `html.dark {}` que sobreescribe todas las CSS vars de surface/on-surface
 - Anti-FOUC: `<script>` síncrono al inicio de `<body>` en layout.tsx lee localStorage antes del paint
-- `ThemeProvider` en `lib/hooks/useTheme.tsx` sincroniza con `Setting.darkMode` de la DB
+- `ThemeProvider` en `lib/hooks/useTheme.tsx` sincroniza con `Setting.darkMode` de la DB (con `.catch(() => {})` — no rompe sin DB)
 
 ### Componentes UI (`components/ui/`)
 - **`field.tsx`**: `Input`, `SelectField`, `Field`, `FieldLabel`, `FieldError`, `Btn`
-- **`modal.tsx`**: Modal con props `title`, `subtitle?`, `onClose`. Cierra con Escape, bloquea scroll
+- **`modal.tsx`**: Modal con props `title`, `subtitle?`, `onClose`. Fondo `bg-surface` (tema-aware, NO hardcodeado). Cierra con Escape, bloquea scroll
 - **`spinner.tsx`**: `Spinner`, `PageSpinner`
 
 ### Clases CSS custom
@@ -67,16 +69,23 @@
 - `.shadow-card` — sombra suave
 - `.no-scrollbar` — oculta scrollbar
 
+### IMPORTANTE: No usar colores hardcodeados
+Usar siempre variables CSS del tema: `bg-surface`, `bg-surface-container`, `bg-surface-container-high`, `text-on-surface`, `text-on-surface-variant`, `border-outline-variant/20`, etc. Nunca `bg-white`, `text-white`, `bg-[#0f1117]`.
+
 ---
 
 ## 4. Autenticación
 
 - Token JWT en `localStorage.auth_token` (expira 7d)
-- Usuario en `localStorage.auth_user` (JSON)
+- Usuario en `localStorage.auth_user` (JSON) — incluye `isAdmin?: boolean`
 - `lib/auth.ts`: `hashPassword`, `verifyPassword`, `createToken`, `verifyToken`, `authenticateToken`
 - `lib/adminAuth.ts`: `requireAdmin(authHeader)` — verifica userId + `isAdmin: true` en DB; `generateKey()` — genera código 6 chars alfanumérico sin ambiguos (sin 0/O, 1/I)
 - `lib/hooks/useAuth.tsx`: `AuthProvider`, `useAuth()`, `useProtected()`
+  - `AuthUser = { id, name, email, isAdmin?: boolean }`
 - `lib/hooks/useTheme.tsx`: `ThemeProvider`, `useTheme()` — lee localStorage + sincroniza con DB
+
+### Login API
+`POST /api/auth/login` retorna `{ token, user: { id, name, email, isAdmin } }` — `isAdmin` se persiste en localStorage.
 
 ### `app/providers.tsx`
 ```tsx
@@ -105,23 +114,24 @@
 
 ### `components/layout/topbar.tsx` (`'use client'`)
 - Fixed, `left-0 w-full lg:left-60 lg:w-[calc(100%-240px)]`
-- Avatar click → Settings modal (perfil, dark mode toggle, cambiar contraseña)
+- Avatar click → Settings modal
+  - **Si `user?.isAdmin`**: botón "Panel de Administrador" (Shield icon) arriba del perfil → navega a `/admin`
+  - Perfil, dark mode toggle, cambiar contraseña
 - Bell con badge rojo de no leídas → Notifications modal
-- Settings modal: toggle dark mode (llama `api.put('/configuracion', { darkMode })`), form cambiar contraseña
 - Notifications modal: marcar todas como leídas, marcar una, eliminar
 
 ### `components/layout/sidebar.tsx` (`'use client'`)
 - `hidden lg:flex` — solo visible en desktop (≥1024px)
 - Fixed, `w-60` (240px), `left-0 top-0 h-full`
-- Logo Lumina Finance + 8 nav items con iconos
+- Logo Lumina Finance + **9 nav items** con iconos
 - Item activo: `bg-secondary-container text-on-secondary-container`
 
 ### `components/layout/bottomnav.tsx` (`'use client'`)
 - `lg:hidden` — solo visible en mobile
-- `overflow-x-auto no-scrollbar` (scroll horizontal para 8 items)
+- `overflow-x-auto no-scrollbar` (scroll horizontal para 9 items)
 - Items con `shrink-0`
 
-### Ítems de navegación (ambos sidebar y bottomnav)
+### Ítems de navegación (sidebar y bottomnav — 9 items)
 ```
 / → Inicio (Home)
 /historial → Historial (History)
@@ -131,6 +141,7 @@
 /presupuestos → Metas (Target)
 /tarjetas → Tarjetas (CreditCard)
 /ia → IA (MoreHorizontal)
+/about → Acerca de (Info)
 ```
 
 ### Páginas — layout responsivo
@@ -166,7 +177,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | createdAt / updatedAt | DateTime | |
 | Relaciones | incomes, expenses, debts, budgets, goals, payments, accounts, alerts, settings?, creditCards, cardPurchases, cardPayments | |
 
-**`Account`** — type: CASH/BANK/NEQUI/DAVIPLATA/CARD · currency default "USD" (seed crea con "COP")
+**`Account`** — type: CASH/BANK/NEQUI/DAVIPLATA/CARD · currency default "COP"
 
 **`Category`** — global (sin userId), todos comparten el catálogo · Relaciones: incomes[], expenses[], cardPurchases[]
 
@@ -239,26 +250,28 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 ## 7. API Routes (todas)
 
 Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
+**Todas las rutas GET tienen try/catch** — retornan datos vacíos (o mock) si la DB no está disponible.
 
 ### Autenticación
 | Ruta | Método | Auth | Descripción |
 |------|--------|------|-------------|
 | `/api/auth/register` | POST | No | Valida `registrationKey` contra clave activa en DB. Crea user + 3 cuentas + Setting + Alert bienvenida |
-| `/api/auth/login` | POST | No | Retorna `{ token, user: { id, name, email } }` |
+| `/api/auth/login` | POST | No | Retorna `{ token, user: { id, name, email, isAdmin } }` |
 | `/api/auth/cambiar-password` | PUT | Sí | Verifica `currentPassword`, hashea `newPassword`, actualiza |
+| `/api/demo-login` | GET | No | **Solo desarrollo** (bloqueado en NODE_ENV=production). Genera JWT para usuario demo sin DB. Retorna `{ token, user: { id: 'demo-user-id', name: 'Diego Demo', email: 'demo@luminafi.com', isAdmin: true } }` |
 
 ### Dashboard
 | Ruta | Descripción |
 |------|-------------|
-| `GET /api/dashboard` | totalBalance, monthlyIncome, monthlyExpenses, totalDebt (incluye usedBalance de tarjetas), netWorth, healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount |
+| `GET /api/dashboard` | totalBalance, monthlyIncome, monthlyExpenses, totalDebt, netWorth, healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Si DB falla → retorna MOCK_DASHBOARD con datos de ejemplo en COP** |
 
 ### Ingresos / Gastos / Deudas / Presupuestos / Metas / Pagos / Categorías / Cuentas
-*(sin cambios respecto a versión anterior — CRUD estándar)*
+GET de cada ruta retorna array vacío si DB no disponible.
 
 ### Alertas
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `/api/alertas` | GET | Lista alertas + unreadCount, orderBy [read asc, createdAt desc] |
+| `/api/alertas` | GET | Lista alertas + unreadCount. Si DB falla → `{ alerts: [], unreadCount: 0 }` |
 | `/api/alertas` | PUT | Body `{ markAllRead: true }` → marca todas como leídas |
 | `/api/alertas/[id]` | PUT | Marca alerta individual como leída |
 | `/api/alertas/[id]` | DELETE | Elimina alerta |
@@ -266,25 +279,25 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 ### Configuración
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `/api/configuracion` | GET | Upsert Setting (crea si no existe con darkMode: false, notifications: true) |
+| `/api/configuracion` | GET | Upsert Setting. Si DB falla → `{ setting: { darkMode: false, notifications: true } }` |
 | `/api/configuracion` | PUT | Actualiza darkMode y/o notifications |
 
 ### Tarjetas de Crédito
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `GET /api/tarjetas` | GET | Lista tarjetas con purchases (include category) + payments, orderBy createdAt desc |
+| `GET /api/tarjetas` | GET | Lista tarjetas con purchases + payments. Si DB falla → `{ cards: [] }` |
 | `POST /api/tarjetas` | POST | Crea tarjeta |
 | `GET/PUT/DELETE /api/tarjetas/[id]` | — | CRUD individual |
-| `GET/POST /api/tarjetas/[id]/compras` | — | Lista / crea compra (calcula installmentAmt, incrementa usedBalance) |
+| `GET/POST /api/tarjetas/[id]/compras` | — | Lista / crea compra |
 | `DELETE /api/tarjetas/[id]/compras/[purchaseId]` | — | Elimina compra, decrementa usedBalance |
 | `GET /api/tarjetas/[id]/abonos` | GET | Lista abonos de la tarjeta |
-| `POST /api/tarjetas/[id]/abonos` | POST | Registra abono: decrementa usedBalance (Math.max(0, balance - amount)), $transaction |
-| `DELETE /api/tarjetas/[id]/abonos/[paymentId]` | DELETE | Elimina abono, restaura usedBalance (Math.min(limit, balance + amount)) |
+| `POST /api/tarjetas/[id]/abonos` | POST | Registra abono: decrementa usedBalance |
+| `DELETE /api/tarjetas/[id]/abonos/[paymentId]` | DELETE | Elimina abono, restaura usedBalance |
 
 ### Historial
 | Ruta | Método | Descripción |
 |------|--------|-------------|
-| `GET /api/historial` | GET | Query params: `from`, `to`, `type` (ALL/INCOME/EXPENSE), `categoryId`. Retorna: transactions[], summary {totalIncome, totalExpenses, balance}, byMonth[], byCategory[] |
+| `GET /api/historial` | GET | Query params: `from`, `to`, `type`, `categoryId`. Si DB falla → vacío |
 
 ### Admin (requieren isAdmin: true en DB)
 | Ruta | Método | Descripción |
@@ -292,16 +305,24 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 | `GET /api/admin/me` | GET | Verifica si usuario es admin |
 | `GET /api/admin/stats` | GET | totalUsers, newThisMonth, activeKey |
 | `GET /api/admin/usuarios` | GET | Lista todos los usuarios con _count {incomes, expenses} |
-| `DELETE /api/admin/usuarios/[id]` | DELETE | Elimina usuario + todos sus datos (cascade manual en $transaction). No puede eliminar admins ni a sí mismo |
+| `DELETE /api/admin/usuarios/[id]` | DELETE | Elimina usuario + todos sus datos en cascada ($transaction). No puede eliminar admins ni a sí mismo |
 | `GET /api/admin/clave` | GET | Obtiene clave de registro activa |
-| `POST /api/admin/clave` | POST | Genera nueva clave (desactiva anteriores), retorna nuevo código |
-| `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY`. Idempotente. Crea/actualiza admin@luminafi.com con isAdmin:true + password Dlh2026. Crea clave de registro si no existe |
+| `POST /api/admin/clave` | POST | Genera nueva clave (desactiva anteriores) |
+| `GET /api/admin/categorias` | GET | Lista todas las categorías globales con `_count {incomes, expenses, cardPurchases}` |
+| `POST /api/admin/categorias` | POST | Crea categoría global. Body: `{ name, type: 'INCOME'|'EXPENSE' }` |
+| `PUT /api/admin/categorias/[id]` | PUT | Renombra categoría. Body: `{ name }` |
+| `DELETE /api/admin/categorias/[id]` | DELETE | Elimina si no está en uso (verifica _count). Error 409 si hay registros |
+| `GET /api/admin/cuentas?userId=` | GET | Lista cuentas de un usuario con `_count {incomes, expenses}` |
+| `POST /api/admin/cuentas` | POST | Crea cuenta para un usuario. Body: `{ userId, name, type, balance, currency }` |
+| `PUT /api/admin/cuentas/[id]` | PUT | Edita cuenta. Body: `{ name, type, balance, currency }` |
+| `DELETE /api/admin/cuentas/[id]` | DELETE | Elimina si no tiene transacciones. Error 409 si hay registros |
+| `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY`. Idempotente. Crea/actualiza admin@luminafi.com con isAdmin:true |
 
 ### Utilidades
 | Ruta | Descripción |
 |------|-------------|
 | `GET /api/health` | Prueba DB con SELECT 1 |
-| `GET /api/seed?key=SEED_KEY` | Seed inicial (idempotente, verifica alex@finanzasdev.com) |
+| `GET /api/seed?key=SEED_KEY` | Seed inicial (idempotente) |
 | `GET /api/seed/categorias?key=SEED_KEY` | Upsert idempotente de categorías |
 
 ---
@@ -310,42 +331,41 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 
 ### `/` — Dashboard
 - Health score SVG circular, Wealth card gradiente negro, 4 overview cards scroll horizontal, CashFlow chart (Recharts BarChart), transacciones recientes
+- **Si DB no disponible:** muestra datos mock (salario 5.5M COP, arriendo, etc.)
 
-### `/historial` — Historial (`app/historial/page.tsx`)
-- **Filtros:** chips de período (Este mes / Mes anterior / 3 meses / 6 meses / Este año), tipo (ALL/INCOME/EXPENSE), categoría dropdown
-- **Resumen:** 3 cards (Ingresos totales, Gastos totales, Balance del período)
-- **Gráficas:** BarChart ingresos vs gastos por mes (3/5 ancho desktop) + PieChart gastos por categoría con donut (2/5 ancho desktop)
-- **Lista:** búsqueda cliente-side (filtra por label y categoría), ícono tipo, descripción, categoría·cuenta, fecha, monto coloreado
+### `/historial` — Historial
+- Filtros período/tipo/categoría, bar chart mensual, donut por categoría, lista con búsqueda
 
 ### `/ingresos`, `/gastos`, `/deudas`, `/presupuestos`, `/ia`, `/calculadoras`
-- Sin cambios estructurales respecto a versión anterior
+- Sin cambios estructurales
 
 ### `/tarjetas` — Tarjetas de Crédito
-- Vista lista + vista detalle en misma página
-- **Detalle ahora incluye sección "Abonos":**
-  - Lista abonos con monto, fecha, nota opcional, botón eliminar
-  - Botón "Abonar" abre modal pre-llenado con pago mínimo estimado
-  - Modal: monto, fecha, nota opcional, muestra saldo actual como referencia
-- Cálculo pago mínimo: `max(usedBalance * 0.05, cuotasMes + interesMes)`
+- Vista lista + vista detalle con sección "Abonos"
 
-### `/auth/register` — Registro
-- Ahora incluye campo "Código de acceso" (registrationKey)
-- Se convierte a mayúsculas automáticamente
-- El servidor valida contra `RegistrationKey.code` activa en DB
+### `/about` — Acerca de (`app/about/page.tsx`)
+- **Página protegida** (requiere login), con sidebar/bottomnav normal
+- Secciones: Hero app, grid 8 funcionalidades, roadmap v1.0→v1.6, tarjeta desarrollador, stack tecnológico, card open source v1.6
+- **BUG PENDIENTE:** `Github` icon no existe en lucide-react v1.20.0 — debe reemplazarse por `ExternalLink` en el import y en todos los usos dentro de la página
 
 ### `/auth/login` — Login
-- Tiene `noValidate` en el form (evita validación nativa del browser para email)
+- Form con `noValidate`, fondo `bg-surface-container` (tema-aware)
+- **Botón "Acceso demo"** debajo del form — llama `GET /api/demo-login`, no requiere DB
+
+### `/auth/register` — Registro
+- Incluye campo "Código de acceso" (registrationKey), se convierte a mayúsculas
 
 ### `/admin` — Panel de Administrador
-- **Completamente separado del layout principal** (sin Sidebar, sin TopBar de la app)
-- Tema dark `bg-[#0f1117]`
-- Verifica admin vía `GET /api/admin/me` al montar; si no es admin → redirect a /
+- **Completamente separado** del layout principal (sin Sidebar, sin TopBar de la app)
+- **Sigue el tema del sistema** (light/dark) — usa variables CSS, NO colores hardcodeados
+- Header con botón **Volver** (→ `/`) y botón **Salir** (logout completo)
+- Accesible desde: Settings modal en TopBar (solo si `user.isAdmin`) → botón "Panel de Administrador"
 - **Secciones:**
-  1. Stats: usuarios totales, nuevos este mes, clave activa actual
-  2. Clave de registro: muestra cada carácter en cuadro separado, botón "Generar nueva clave", destaca nuevo código generado
-  3. Tabla de usuarios: nombre (con badge Admin), email, actividad (↑ingresos ↓gastos), fecha registro, botón eliminar (visible en hover)
+  1. Stats: usuarios totales, nuevos este mes, clave activa
+  2. Clave de registro: cuadros individuales por char, botón generar nueva
+  3. **Categorías:** tabs Ingresos/Egresos, lista con edición inline (lápiz → input → Enter/✓), botón eliminar (deshabilitado si en uso), campo agregar al final
+  4. **Cuentas de usuario:** select de usuario → lista cuentas con tipo/saldo/conteo txn, edición inline expandible, botón eliminar (deshabilitado si tiene txn), formulario agregar cuenta
+  5. Usuarios registrados: tabla con nombre/email/actividad/fecha, botón eliminar (cascade completo)
 - Admin: `admin@luminafi.com` / `Dlh2026`
-- URL: `/admin` (navegación manual, no está en sidebar/bottomnav)
 
 ---
 
@@ -380,11 +400,12 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │   ├── providers.tsx            # AuthProvider + ThemeProvider
 │   ├── globals.css              # Tailwind v4, @theme, dark mode vars, .glass-card
 │   ├── page.tsx                 # Dashboard
+│   ├── about/page.tsx           # Acerca de — ⚠️ BUG: Github icon → reemplazar con ExternalLink
 │   ├── historial/page.tsx       # Historial con filtros + charts + lista
 │   ├── tarjetas/page.tsx        # CreditCards + abonos
-│   ├── admin/page.tsx           # Panel admin (dark, standalone)
+│   ├── admin/page.tsx           # Panel admin (tema-aware, standalone, con categorías y cuentas)
 │   ├── auth/
-│   │   ├── login/page.tsx       # noValidate en form
+│   │   ├── login/page.tsx       # noValidate, bg-surface-container, botón demo
 │   │   └── register/page.tsx    # Campo registrationKey
 │   ├── ingresos/page.tsx
 │   ├── gastos/page.tsx
@@ -393,24 +414,25 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │   ├── ia/page.tsx
 │   ├── calculadoras/page.tsx
 │   └── api/
-│       ├── auth/login/route.ts
+│       ├── auth/login/route.ts          # Retorna isAdmin en user
 │       ├── auth/register/route.ts       # Valida registrationKey
 │       ├── auth/cambiar-password/route.ts
-│       ├── dashboard/route.ts
-│       ├── ingresos/route.ts + [id]/
-│       ├── gastos/route.ts + [id]/
-│       ├── deudas/route.ts + [id]/
-│       ├── presupuestos/route.ts + [id]/
-│       ├── metas/route.ts + [id]/
+│       ├── demo-login/route.ts          # GET sin DB, solo dev
+│       ├── dashboard/route.ts           # try/catch con MOCK_DASHBOARD
+│       ├── ingresos/route.ts + [id]/    # GET con try/catch → []
+│       ├── gastos/route.ts + [id]/      # GET con try/catch → []
+│       ├── deudas/route.ts + [id]/      # GET con try/catch → []
+│       ├── presupuestos/route.ts + [id]/# GET con try/catch → []
+│       ├── metas/route.ts + [id]/       # GET con try/catch → []
 │       ├── pagos/route.ts
-│       ├── categorias/route.ts
-│       ├── cuentas/route.ts
-│       ├── alertas/route.ts + [id]/
-│       ├── configuracion/route.ts
-│       ├── historial/route.ts
+│       ├── categorias/route.ts          # GET con try/catch → []
+│       ├── cuentas/route.ts             # GET con try/catch → []
+│       ├── alertas/route.ts + [id]/     # GET con try/catch → {alerts:[], unreadCount:0}
+│       ├── configuracion/route.ts       # GET con try/catch → default setting
+│       ├── historial/route.ts           # try/catch → vacío
 │       ├── health/route.ts
 │       ├── seed/route.ts + categorias/
-│       ├── tarjetas/route.ts
+│       ├── tarjetas/route.ts            # GET con try/catch → []
 │       ├── tarjetas/[id]/route.ts
 │       ├── tarjetas/[id]/compras/route.ts
 │       ├── tarjetas/[id]/compras/[purchaseId]/route.ts
@@ -421,13 +443,18 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │           ├── stats/route.ts
 │           ├── usuarios/route.ts + [id]/
 │           ├── clave/route.ts
-│           └── setup/route.ts           # GET idempotente, crea admin@luminafi.com
+│           ├── categorias/route.ts          # GET+POST admin categorías globales
+│           ├── categorias/[id]/route.ts     # PUT (rename) + DELETE (con validación de uso)
+│           ├── cuentas/route.ts             # GET?userId= + POST
+│           ├── cuentas/[id]/route.ts        # PUT + DELETE (con validación de uso)
+│           └── setup/route.ts
 ├── components/
 │   ├── ui/field.tsx + modal.tsx + spinner.tsx
+│   │   # modal.tsx: bg-surface (NO bg-white hardcodeado)
 │   ├── layout/
-│   │   ├── topbar.tsx           # Settings + Notif modals, dark mode toggle
-│   │   ├── bottomnav.tsx        # lg:hidden, 8 items con scroll
-│   │   └── sidebar.tsx          # hidden lg:flex, 8 items
+│   │   ├── topbar.tsx           # Settings modal con botón admin si user.isAdmin
+│   │   ├── bottomnav.tsx        # lg:hidden, 9 items con scroll
+│   │   └── sidebar.tsx          # hidden lg:flex, 9 items
 │   └── dashboard/cashflow-chart.tsx
 ├── lib/
 │   ├── api.ts
@@ -436,8 +463,8 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │   ├── prisma.ts
 │   ├── validators.ts
 │   └── hooks/
-│       ├── useAuth.tsx
-│       └── useTheme.tsx         # ThemeProvider, useTheme()
+│       ├── useAuth.tsx          # AuthUser incluye isAdmin?: boolean
+│       └── useTheme.tsx
 ├── prisma/
 │   ├── schema.prisma
 │   └── migrations/
@@ -466,12 +493,17 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 ## 12. Comandos frecuentes
 
 ```bash
+# Dev local
+npm run dev
+
+# Limpiar caché y reiniciar (si hay errores de hydration)
+rm -rf .next && npm run dev
+
 # Deploy en VPS (autodeploy en cada push a main)
 # El entrypoint.sh corre: npx prisma migrate deploy && npm start
 
 # Primera vez o cuando cambia el schema:
 curl "https://luminafi.com/api/admin/setup?key=TU_SEED_KEY"
-# → Crea admin@luminafi.com + primera clave de registro
 
 # Seed de categorías (idempotente, safe en producción):
 curl "https://luminafi.com/api/seed/categorias?key=TU_SEED_KEY"
@@ -488,27 +520,34 @@ docker exec lumina_app npx prisma migrate status
 
 ---
 
-## 13. Estado actual del proyecto (2026-06-22)
+## 13. Estado actual del proyecto (2026-06-22 sesión 2)
 
 ### Funcional
 - CRUD: ingresos, gastos, deudas, presupuestos, metas
-- **Tarjetas de crédito** con compras en cuotas + **abonos** que reducen saldo
-- **Dashboard** con health score, cashflow chart, total deuda incluye tarjetas
-- **Historial** (`/historial`): filtros período/tipo/categoría, bar chart mensual, donut por categoría, lista con búsqueda
-- **TopBar**: settings modal (perfil + dark mode + cambiar contraseña), bell con badge + modal de notificaciones
-- **Dark mode** completo con anti-FOUC y sincronización con DB
-- **Sidebar** en desktop (≥1024px), BottomNav en mobile
-- **Panel admin** (`/admin`): gestión de usuarios, generación de clave de registro
-- **Registro controlado**: campo "Código de acceso" obligatorio en registro
-- **16 categorías** globales (6 ingresos, 10 gastos incluyendo Mascotas)
-- Docker producción con Nginx, rate limiting, SSL self-signed
+- Tarjetas de crédito con compras en cuotas + abonos
+- Dashboard con health score, cashflow chart
+- Historial con filtros/charts
+- TopBar: settings modal con botón admin (si isAdmin), dark mode, cambiar contraseña, notificaciones
+- Dark mode completo con anti-FOUC
+- Sidebar (desktop) + BottomNav (mobile) con 9 items
+- Panel admin (`/admin`): tema-aware, categorías CRUD, cuentas CRUD por usuario, usuarios con cascade delete, clave de registro
+- Botón admin en settings modal del TopBar (solo visible si isAdmin)
+- Registro controlado con clave de acceso
+- Demo mode: botón en login, JWT sin DB, todas las rutas GET toleran fallo de DB
+- Página `/about` con roadmap, features, perfil del desarrollador
 
-### Pendientes conocidos
-1. **SSL:** Self-signed actualmente. Pendiente Let's Encrypt con certbot
-2. **IA:** Función local sin LLM real. Para integrar Claude/OpenAI: agregar `/api/ia` + `API_KEY` env
-3. **Balance de cuentas:** No se actualiza automáticamente al crear ingresos/gastos (es manual)
-4. **Categorías:** Globales sin userId — si se necesitan por usuario requiere migración
-5. **paidInstallments en compras:** El campo existe pero no se actualiza automáticamente al hacer abonos
+### Bugs pendientes
+1. **`app/about/page.tsx`**: importa `Github` de lucide-react — ese icon NO existe en v1.20.0. Debe reemplazarse `Github` → `ExternalLink` en el import y en todos los JSX donde se usa (hay ~3 ocurrencias)
+2. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
+3. **IA:** Función local sin LLM real
+4. **Balance de cuentas:** No se actualiza automáticamente al crear ingresos/gastos
+5. **paidInstallments en compras:** El campo existe pero no se actualiza al hacer abonos
+
+### Roadmap (desde `/about`)
+- v1.0–v1.3: completos ✓
+- v1.4: SSL Let's Encrypt
+- v1.5: IA financiera real
+- v1.6: Open source en GitHub
 
 ---
 
@@ -520,7 +559,9 @@ docker exec lumina_app npx prisma migrate status
 - **API calls:** `api.get/post/put/delete` de `lib/api.ts` (agrega Bearer token automático)
 - **Moneda:** `new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })`
 - **Fechas en inputs:** `new Date(item.date).toISOString().split('T')[0]`
-- **Forms con email:** siempre `noValidate` en el `<form>` para evitar validación nativa del browser
+- **Forms con email:** siempre `noValidate` en el `<form>`
+- **NO usar colores hardcodeados** — siempre variables CSS del tema
+- **Lucide icons:** `Github` no existe en v1.20.0, usar `ExternalLink`
 - **Patron de página protegida:**
 ```tsx
 const { user, isLoading } = useProtected();
@@ -535,4 +576,21 @@ return (
     <BottomNav />
   </main>
 );
+```
+
+---
+
+## 15. PROMPT PARA NUEVA SESIÓN
+
+```
+Tengo una app Next.js 15 llamada Lumina Finance. Lee el archivo CONTEXT.md en la raíz del proyecto — tiene el contexto completo antes de continuar.
+
+La app está corriendo en local con `npm run dev` (http://localhost:3000). Si hay errores de hydration o el servidor está caído, el comando para reiniciar limpio es: `rm -rf .next && npm run dev`
+
+Para entrar a la app sin base de datos: ir a /auth/login y usar el botón "Acceso demo (sin base de datos)".
+
+BUG PRIORITARIO a resolver al inicio de sesión:
+- `app/about/page.tsx` tiene `import { ..., Github, ... } from 'lucide-react'` — ese icon NO existe en v1.20.0. Reemplazar `Github` por `ExternalLink` en el import y en todos los lugares donde se usa en el JSX (buscar con grep).
+
+Espera la siguiente instrucción.
 ```
