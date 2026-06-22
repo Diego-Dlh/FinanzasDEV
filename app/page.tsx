@@ -47,6 +47,7 @@ function scoreLabel(s: number) {
 
 export default function HomePage() {
   const { user, isLoading } = useProtected();
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
