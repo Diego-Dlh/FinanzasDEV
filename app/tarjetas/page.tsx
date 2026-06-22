@@ -2,10 +2,10 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CreditCard, Plus, Trash2, Pencil, ChevronLeft, ShoppingCart } from 'lucide-react';
+import { CreditCard, Plus, Trash2, Pencil, ChevronLeft, ShoppingCart, Wallet } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
-import { creditCardSchema, cardPurchaseSchema, type CreditCardInput, type CardPurchaseInput } from '@/lib/validators';
+import { creditCardSchema, cardPurchaseSchema, cardPaymentSchema, type CreditCardInput, type CardPurchaseInput, type CardPaymentInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
@@ -27,6 +27,14 @@ interface CardPurchase {
   category: { id: string; name: string };
 }
 
+interface CardPayment {
+  id: string;
+  cardId: string;
+  amount: number;
+  note: string | null;
+  paidAt: string;
+}
+
 interface CreditCardData {
   id: string;
   name: string;
@@ -38,6 +46,7 @@ interface CreditCardData {
   cutDay: number;
   currency: string;
   purchases: CardPurchase[];
+  payments: CardPayment[];
 }
 
 function fmt(n: number) {
@@ -64,6 +73,7 @@ export default function TarjetasPage() {
 
   const [selectedCard, setSelectedCard] = useState<CreditCardData | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [showAbonoModal, setShowAbonoModal] = useState(false);
 
   const [purchasePreview, setPurchasePreview] = useState<number | null>(null);
 
@@ -74,6 +84,10 @@ export default function TarjetasPage() {
   const purchaseForm = useForm<CardPurchaseInput>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(cardPurchaseSchema) as any,
+  });
+  const abonoForm = useForm<CardPaymentInput>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(cardPaymentSchema) as any,
   });
 
   async function loadData() {
@@ -178,6 +192,38 @@ export default function TarjetasPage() {
     }
   }
 
+  function openAbonoModal() {
+    const { minPayment } = calcMinPayment(selectedCard!);
+    abonoForm.reset({
+      amount: Math.round(minPayment),
+      note: '',
+      paidAt: new Date().toISOString().split('T')[0],
+    });
+    setShowAbonoModal(true);
+  }
+
+  async function onAbonoSubmit(data: CardPaymentInput) {
+    if (!selectedCard) return;
+    try {
+      await api.post(`/tarjetas/${selectedCard.id}/abonos`, data);
+      setShowAbonoModal(false);
+      await loadData();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleDeleteAbono(paymentId: string) {
+    if (!selectedCard) return;
+    if (!confirm('¿Eliminar este abono? Se restaurará el saldo.')) return;
+    try {
+      await api.delete(`/tarjetas/${selectedCard.id}/abonos/${paymentId}`);
+      await loadData();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
@@ -203,6 +249,8 @@ export default function TarjetasPage() {
             onDelete={() => handleDeleteCard(selectedCard.id)}
             onAddPurchase={openPurchaseModal}
             onDeletePurchase={handleDeletePurchase}
+            onAddAbono={openAbonoModal}
+            onDeleteAbono={handleDeleteAbono}
           />
         ) : (
           <>
@@ -385,6 +433,48 @@ export default function TarjetasPage() {
         </Modal>
       )}
 
+      {/* ── Abono modal ─────────────────────────────────────────────────────── */}
+      {showAbonoModal && selectedCard && (
+        <Modal
+          title="Registrar Abono"
+          subtitle={`Tarjeta: ${selectedCard.name}`}
+          onClose={() => setShowAbonoModal(false)}
+        >
+          <form onSubmit={abonoForm.handleSubmit(onAbonoSubmit)} className="space-y-4">
+            <Field label="Monto abonado" error={abonoForm.formState.errors.amount?.message} required>
+              <Input
+                {...abonoForm.register('amount', { valueAsNumber: true })}
+                type="number"
+                step="1000"
+                placeholder="0"
+              />
+            </Field>
+
+            <Field label="Fecha del pago" error={abonoForm.formState.errors.paidAt?.message} required>
+              <Input {...abonoForm.register('paidAt')} type="date" />
+            </Field>
+
+            <Field label="Nota (opcional)" error={abonoForm.formState.errors.note?.message}>
+              <Input {...abonoForm.register('note')} placeholder="ej. Pago mínimo junio" />
+            </Field>
+
+            <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm text-on-secondary-container">
+              Saldo actual:{' '}
+              <span className="font-semibold">{fmt(selectedCard.usedBalance)}</span>
+            </div>
+
+            <Btn
+              type="submit"
+              variant="primary"
+              loading={abonoForm.formState.isSubmitting}
+              className="w-full mt-2"
+            >
+              Registrar abono
+            </Btn>
+          </form>
+        </Modal>
+      )}
+
       <BottomNav />
     </main>
   );
@@ -478,6 +568,8 @@ function CardDetail({
   onDelete,
   onAddPurchase,
   onDeletePurchase,
+  onAddAbono,
+  onDeleteAbono,
 }: {
   card: CreditCardData;
   categories: Category[];
@@ -486,6 +578,8 @@ function CardDetail({
   onDelete: () => void;
   onAddPurchase: () => void;
   onDeletePurchase: (id: string) => void;
+  onAddAbono: () => void;
+  onDeleteAbono: (id: string) => void;
 }) {
   const used = card.usedBalance;
   const limit = card.creditLimit;
@@ -571,6 +665,55 @@ function CardDetail({
             <span className="font-bold text-primary">{fmt(minPayment)}</span>
           </div>
         </div>
+      </div>
+
+      {/* Abonos */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">
+            Abonos ({card.payments.length})
+          </p>
+          <Btn variant="secondary" size="sm" icon={<Wallet size={14} />} onClick={onAddAbono}>
+            Abonar
+          </Btn>
+        </div>
+
+        {card.payments.length === 0 ? (
+          <div className="glass-card rounded-[24px] p-6 text-center shadow-card">
+            <Wallet size={28} className="text-on-surface-variant mx-auto mb-2 opacity-40" />
+            <p className="text-on-surface-variant text-sm">Sin abonos registrados.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {card.payments.map((payment) => (
+              <div
+                key={payment.id}
+                className="glass-card rounded-[20px] p-4 shadow-card flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                    <Wallet size={15} className="text-secondary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm text-secondary">{fmt(payment.amount)}</p>
+                    <p className="text-xs text-on-surface-variant">
+                      {new Date(payment.paidAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                    {payment.note && (
+                      <p className="text-xs text-on-surface-variant truncate">{payment.note}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onDeleteAbono(payment.id)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-error-container transition text-on-surface-variant hover:text-error shrink-0"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Purchases */}

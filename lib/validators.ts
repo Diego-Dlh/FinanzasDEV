@@ -84,6 +84,12 @@ export type DebtInput        = z.infer<typeof debtSchema>;
 export type BudgetInput      = z.infer<typeof budgetSchema>;
 export type GoalInput        = z.infer<typeof goalSchema>;
 export type PaymentInput     = z.infer<typeof paymentSchema>;
+export const cardPaymentSchema = z.object({
+  amount: z.number().positive('El monto debe ser positivo'),
+  note:   z.string().optional(),
+  paidAt: z.string().min(1, 'La fecha es requerida'),
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Ingresa tu contraseña actual'),
   newPassword:     z.string().min(6, 'Mínimo 6 caracteres'),
@@ -94,5 +100,6 @@ export const changePasswordSchema = z.object({
 });
 
 export type CreditCardInput      = z.infer<typeof creditCardSchema>;
-export type CardPurchaseInput     = z.infer<typeof cardPurchaseSchema>;
+export type CardPurchaseInput    = z.infer<typeof cardPurchaseSchema>;
+export type CardPaymentInput     = z.infer<typeof cardPaymentSchema>;
 export type ChangePasswordInput   = z.infer<typeof changePasswordSchema>;

@@ -46,6 +46,7 @@ model User {
   settings       Setting?
   creditCards    CreditCard[]
   cardPurchases  CardPurchase[]
+  cardPayments   CardPayment[]
 }
 
 model Account {
@@ -186,6 +187,19 @@ model CreditCard {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   purchases    CardPurchase[]
+  payments     CardPayment[]
+}
+
+model CardPayment {
+  id        String     @id @default(cuid())
+  user      User       @relation(fields: [userId], references: [id])
+  userId    String
+  card      CreditCard @relation(fields: [cardId], references: [id])
+  cardId    String
+  amount    Float
+  note      String?
+  paidAt    DateTime   @default(now())
+  createdAt DateTime   @default(now())
 }
 
 model CardPurchase {

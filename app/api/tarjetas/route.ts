@@ -15,6 +15,9 @@ export async function GET(request: Request) {
         include: { category: true },
         orderBy: { date: 'desc' },
       },
+      payments: {
+        orderBy: { paidAt: 'desc' },
+      },
     },
   });
 
