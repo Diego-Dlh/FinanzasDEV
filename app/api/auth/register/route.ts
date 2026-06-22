@@ -11,7 +11,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: first?.message ?? 'Datos inválidos' }, { status: 400 });
   }
 
-  const { name, email, password } = parse.data;
+  const { name, email, password, registrationKey } = parse.data;
+
+  // Validate registration key
+  const activeKey = await prisma.registrationKey.findFirst({ where: { active: true } });
+  if (!activeKey || registrationKey.toUpperCase() !== activeKey.code) {
+    return NextResponse.json({ error: 'Código de acceso inválido o no existe una clave activa' }, { status: 403 });
+  }
+
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) {
     return NextResponse.json({ error: 'El correo ya está registrado' }, { status: 409 });

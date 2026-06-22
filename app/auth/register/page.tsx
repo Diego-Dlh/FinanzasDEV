@@ -96,6 +96,22 @@ export default function RegisterPage() {
             {errors.password && <p className="mt-1.5 text-xs font-medium text-error">{errors.password.message}</p>}
           </div>
 
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-1.5">Código de acceso</label>
+            <Input
+              {...register('registrationKey')}
+              autoComplete="off"
+              placeholder="Ingresa el código de 6 caracteres"
+              className="font-mono tracking-widest uppercase"
+              onChange={(e) => {
+                e.target.value = e.target.value.toUpperCase();
+                register('registrationKey').onChange(e);
+              }}
+            />
+            {errors.registrationKey && <p className="mt-1.5 text-xs font-medium text-error">{errors.registrationKey.message}</p>}
+            <p className="mt-1.5 text-xs text-on-surface-variant">Solicita este código al administrador.</p>
+          </div>
+
           <Btn type="submit" variant="secondary" loading={isSubmitting} className="w-full">
             Crear cuenta
           </Btn>
