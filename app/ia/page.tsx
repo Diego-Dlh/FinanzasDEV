@@ -123,7 +123,7 @@ export default function IAPage() {
     <main className="min-h-screen bg-surface text-on-surface">
       <TopBar title="Asesor IA" />
 
-      <div className="pt-20 pb-44 px-6 max-w-2xl mx-auto space-y-4 min-h-screen">
+      <div className="pt-20 pb-44 px-6 max-w-2xl lg:max-w-5xl mx-auto space-y-4 min-h-screen">
         {/* Header */}
         <div className="glass-card rounded-[24px] p-5 shadow-card flex items-center gap-4 mt-4">
           <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
@@ -192,8 +192,8 @@ export default function IAPage() {
       </div>
 
       {/* Input */}
-      <div className="fixed bottom-16 left-0 right-0 px-6 pb-3 pt-2 bg-surface/80 backdrop-blur-xl border-t border-outline-variant/10">
-        <div className="max-w-2xl mx-auto">
+      <div className="fixed bottom-16 lg:bottom-0 left-0 lg:left-60 right-0 px-6 pb-3 pt-2 bg-surface/80 backdrop-blur-xl border-t border-outline-variant/10">
+        <div className="max-w-2xl lg:max-w-5xl mx-auto">
           <form
             onSubmit={(e) => { e.preventDefault(); sendMessage(input); }}
             className="glass-card flex items-center gap-3 rounded-full border border-outline-variant/20 px-4 py-2.5 shadow-card"

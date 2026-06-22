@@ -17,7 +17,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 z-50 w-full border-t border-outline-variant/10 bg-surface/95 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+    <nav className="lg:hidden fixed bottom-0 left-0 z-50 w-full border-t border-outline-variant/10 bg-surface/95 backdrop-blur-xl shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
       <div className="flex items-center gap-1 overflow-x-auto no-scrollbar px-3 py-2">
         {items.map((item) => {
           const Icon = item.icon;

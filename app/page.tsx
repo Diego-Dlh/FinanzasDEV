@@ -76,9 +76,9 @@ export default function HomePage() {
   ];
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface pb-32">
+    <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
       <TopBar title="Lumina Finance" />
-      <section className="pt-24 pb-6 px-6 max-w-2xl mx-auto space-y-6">
+      <section className="pt-24 pb-6 px-6 max-w-2xl lg:max-w-5xl mx-auto space-y-6">
 
         {/* Wealth Card + Health Score */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

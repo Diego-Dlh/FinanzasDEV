@@ -231,9 +231,9 @@ export default function TarjetasPage() {
   const totalLimit = cards.reduce((s, c) => s + c.creditLimit, 0);
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface pb-32">
+    <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
       <TopBar title="Tarjetas" />
-      <section className="pt-24 px-6 max-w-2xl mx-auto space-y-6">
+      <section className="pt-24 px-6 max-w-2xl lg:max-w-5xl mx-auto space-y-6">
 
         {error && (
           <div className="rounded-2xl bg-error-container px-4 py-3 text-sm text-on-error-container">{error}</div>

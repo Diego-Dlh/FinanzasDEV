@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { Sidebar } from '@/components/layout/sidebar';
 
 const inter = Inter({ subsets: ['latin'], display: 'swap' });
 
@@ -17,7 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={inter.className}>
         {/* Runs synchronously before paint — prevents dark-mode flash */}
         <script dangerouslySetInnerHTML={{ __html: `try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}` }} />
-        <Providers>{children}</Providers>
+        <Providers>
+          <Sidebar />
+          <div className="lg:pl-60">
+            {children}
+          </div>
+        </Providers>
       </body>
     </html>
   );

@@ -376,9 +376,9 @@ export default function CalculatorsPage() {
   if (!user) return null;
 
   return (
-    <main className="min-h-screen bg-surface text-on-surface pb-32">
+    <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
       <TopBar title="Calculadoras" />
-      <section className="pt-24 px-6 max-w-2xl mx-auto space-y-4 pb-6">
+      <section className="pt-24 px-6 max-w-2xl lg:max-w-5xl mx-auto space-y-4 pb-6">
         <div className="space-y-2 px-1">
           <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">Herramientas</p>
           <h1 className="text-2xl font-semibold text-primary">Calculadoras Financieras</h1>

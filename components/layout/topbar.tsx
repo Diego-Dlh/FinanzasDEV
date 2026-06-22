@@ -98,7 +98,7 @@ export function TopBar({ title }: { title: string }) {
 
   return (
     <>
-      <header className="fixed top-0 left-0 z-50 w-full border-b border-outline-variant/10 bg-surface/90 backdrop-blur-xl px-6 py-4 shadow-sm">
+      <header className="fixed top-0 left-0 z-50 w-full lg:left-60 lg:w-[calc(100%-240px)] border-b border-outline-variant/10 bg-surface/90 backdrop-blur-xl px-6 py-4 shadow-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           {/* Avatar (opens settings) */}
           <div className="flex items-center gap-4">
