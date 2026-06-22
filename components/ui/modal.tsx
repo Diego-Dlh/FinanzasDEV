@@ -29,7 +29,7 @@ export function Modal({ title, subtitle, onClose, children }: ModalProps) {
       />
 
       {/* Sheet */}
-      <div className="relative z-10 w-full max-w-lg rounded-[28px] overflow-hidden shadow-2xl" style={{ background: '#ffffff' }}>
+      <div className="relative z-10 w-full max-w-lg rounded-[28px] overflow-hidden shadow-2xl bg-surface">
 
         {/* Header */}
         <div className="flex items-start justify-between px-6 pt-6 pb-5 border-b border-outline-variant/15">

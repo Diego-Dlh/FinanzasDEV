@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
-export interface AuthUser { id: string; name: string; email: string }
+export interface AuthUser { id: string; name: string; email: string; isAdmin?: boolean }
 
 interface AuthCtx {
   user: AuthUser | null;

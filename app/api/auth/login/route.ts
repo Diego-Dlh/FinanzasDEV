@@ -22,5 +22,5 @@ export async function POST(request: Request) {
   }
 
   const token = createToken({ userId: user.id });
-  return NextResponse.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  return NextResponse.json({ token, user: { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin } });
 }

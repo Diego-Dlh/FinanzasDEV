@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Bell, LogOut, Moon, Sun, Lock, Trash2, CheckCheck, X } from 'lucide-react';
+import { Bell, LogOut, Moon, Sun, Lock, Trash2, CheckCheck, X, Shield } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -151,6 +151,22 @@ export function TopBar({ title }: { title: string }) {
       {showSettings && (
         <Modal title="Configuración" onClose={() => { setShowSettings(false); setPwSuccess(''); setPwError(''); pwForm.reset(); }}>
           <div className="space-y-6">
+
+            {/* Admin panel shortcut */}
+            {user?.isAdmin && (
+              <button
+                onClick={() => { setShowSettings(false); router.push('/admin'); }}
+                className="flex w-full items-center gap-3 rounded-2xl bg-secondary/10 border border-secondary/20 px-4 py-3.5 text-left transition hover:bg-secondary/15"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary/20">
+                  <Shield size={16} className="text-secondary" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-secondary">Panel de Administrador</p>
+                  <p className="text-xs text-on-surface-variant">Gestión de usuarios y claves</p>
+                </div>
+              </button>
+            )}
 
             {/* Profile */}
             <div className="flex items-center gap-4 rounded-2xl bg-surface-container-low px-4 py-4">
