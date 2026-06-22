@@ -1,16 +1,17 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, TrendingUp, TrendingDown, Landmark, Target, CreditCard, MoreHorizontal } from 'lucide-react';
+import { Home, TrendingUp, TrendingDown, Landmark, Target, CreditCard, MoreHorizontal, History } from 'lucide-react';
 
 const items = [
-  { href: '/',             label: 'Inicio',   icon: Home },
-  { href: '/ingresos',     label: 'Ingresos', icon: TrendingUp },
-  { href: '/gastos',       label: 'Gastos',   icon: TrendingDown },
-  { href: '/deudas',       label: 'Deudas',   icon: Landmark },
-  { href: '/presupuestos', label: 'Metas',    icon: Target },
-  { href: '/tarjetas',     label: 'Tarjetas', icon: CreditCard },
-  { href: '/ia',           label: 'IA',       icon: MoreHorizontal },
+  { href: '/',             label: 'Inicio',    icon: Home },
+  { href: '/historial',    label: 'Historial', icon: History },
+  { href: '/ingresos',     label: 'Ingresos',  icon: TrendingUp },
+  { href: '/gastos',       label: 'Gastos',    icon: TrendingDown },
+  { href: '/deudas',       label: 'Deudas',    icon: Landmark },
+  { href: '/presupuestos', label: 'Metas',     icon: Target },
+  { href: '/tarjetas',     label: 'Tarjetas',  icon: CreditCard },
+  { href: '/ia',           label: 'IA',        icon: MoreHorizontal },
 ];
 
 export function BottomNav() {
