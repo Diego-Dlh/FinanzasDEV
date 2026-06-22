@@ -64,7 +64,7 @@ export async function GET(request: Request) {
       prisma.creditCard.findMany({ where: { userId } }),
     ]);
 
-  const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
+  const totalBalance = accounts.filter(a => !a.hideFromTotal).reduce((s, a) => s + a.balance, 0);
   const totalMonthlyIncome = monthlyIncomes.reduce((s, i) => s + i.amount, 0);
   const totalMonthlyExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
   const cardDebt = cards.reduce((s, c) => s + c.usedBalance, 0);

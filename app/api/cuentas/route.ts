@@ -7,11 +7,15 @@ export async function GET(request: Request) {
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const accounts = await prisma.account.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-  });
-  return NextResponse.json({ accounts });
+  try {
+    const accounts = await prisma.account.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+    });
+    return NextResponse.json({ accounts });
+  } catch {
+    return NextResponse.json({ accounts: [] });
+  }
 }
 
 export async function POST(request: Request) {

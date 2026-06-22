@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, TrendingDown, CreditCard, Gem } from 'lucide-react';
+import { TrendingUp, TrendingDown, CreditCard } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
 import { BottomNav } from '@/components/layout/bottomnav';
@@ -72,7 +72,6 @@ export default function HomePage() {
     { label: 'Ingresos', value: fmtShort(d.monthlyIncome), icon: TrendingUp, color: 'text-secondary', bg: 'bg-secondary/10' },
     { label: 'Gastos', value: fmtShort(d.monthlyExpenses), icon: TrendingDown, color: 'text-error', bg: 'bg-error/10' },
     { label: 'Total Deuda', value: fmtShort(d.totalDebt), icon: CreditCard, color: 'text-on-tertiary-container', bg: 'bg-tertiary-container/20' },
-    { label: 'Patrimonio', value: fmtShort(d.netWorth), icon: Gem, color: 'text-primary', bg: 'bg-primary/10' },
   ];
 
   return (
@@ -82,7 +81,10 @@ export default function HomePage() {
 
         {/* Wealth Card + Health Score */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-2 relative rounded-[24px] p-6 text-white shadow-xl flex flex-col justify-between h-48 overflow-hidden bg-gradient-to-br from-black via-gray-900 to-gray-800">
+          <div
+            className="sm:col-span-2 relative rounded-[24px] p-6 text-white shadow-xl flex flex-col justify-between h-48 overflow-hidden bg-gradient-to-br from-black via-gray-900 to-gray-800 cursor-pointer active:scale-[0.98] transition-transform"
+            onClick={() => router.push('/cuentas')}
+          >
             <div className="absolute -top-16 -right-16 w-40 h-40 bg-secondary/20 blur-[60px] rounded-full" />
             <div>
               <p className="text-xs uppercase tracking-[0.25em] text-on-primary-container opacity-80 mb-1">Saldo Disponible</p>
