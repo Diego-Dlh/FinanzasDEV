@@ -13,8 +13,11 @@ export async function PUT(
 
   const body = await request.json();
 
+  const existing = await prisma.account.findFirst({ where: { id, userId } });
+  if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
+
   const account = await prisma.account.update({
-    where: { id, userId },
+    where: { id },
     data: {
       ...(body.hideFromTotal !== undefined && { hideFromTotal: body.hideFromTotal }),
     },
