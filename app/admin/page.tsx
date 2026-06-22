@@ -1,9 +1,9 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Users, RefreshCw, Trash2, Shield, KeyRound, LogOut, ChevronRight,
-  UserCircle, Calendar, BarChart2, ArrowLeft,
+  UserCircle, Calendar, BarChart2, ArrowLeft, Tag, Pencil, Plus, Check, X, Info,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -27,6 +27,14 @@ interface Stats {
   totalUsers: number;
   newThisMonth: number;
   activeKey: ActiveKey | null;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  type: 'INCOME' | 'EXPENSE';
+  createdAt: string;
+  _count: { incomes: number; expenses: number; cardPurchases: number };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -53,24 +61,36 @@ function fmtDate(iso: string) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter();
-  const [ready, setReady]     = useState(false);
-  const [error, setError]     = useState('');
-  const [stats, setStats]     = useState<Stats | null>(null);
-  const [users, setUsers]     = useState<AdminUser[]>([]);
-  const [key, setKey]         = useState<ActiveKey | null>(null);
+  const [ready, setReady]         = useState(false);
+  const [error, setError]         = useState('');
+  const [stats, setStats]         = useState<Stats | null>(null);
+  const [users, setUsers]         = useState<AdminUser[]>([]);
+  const [key, setKey]             = useState<ActiveKey | null>(null);
   const [genLoading, setGenLoading] = useState(false);
-  const [newCode, setNewCode] = useState('');
+  const [newCode, setNewCode]     = useState('');
+
+  // Category state
+  const [categories, setCategories]     = useState<Category[]>([]);
+  const [catTab, setCatTab]             = useState<'INCOME' | 'EXPENSE'>('INCOME');
+  const [newCatName, setNewCatName]     = useState('');
+  const [addingCat, setAddingCat]       = useState(false);
+  const [editingId, setEditingId]       = useState<string | null>(null);
+  const [editName, setEditName]         = useState('');
+  const [catError, setCatError]         = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, usersRes, keyRes] = await Promise.all([
+      const [statsRes, usersRes, keyRes, catsRes] = await Promise.all([
         apiFetch<Stats>('/admin/stats'),
         apiFetch<{ users: AdminUser[] }>('/admin/usuarios'),
         apiFetch<{ key: ActiveKey | null }>('/admin/clave'),
+        apiFetch<{ categories: Category[] }>('/admin/categorias'),
       ]);
       setStats(statsRes);
       setUsers(usersRes.users);
       setKey(keyRes.key);
+      setCategories(catsRes.categories);
       setNewCode('');
     } catch (e) {
       setError((e as Error).message);
@@ -85,6 +105,10 @@ export default function AdminPage() {
       .then(() => { setReady(true); load(); })
       .catch(() => router.replace('/'));
   }, [load, router]);
+
+  useEffect(() => {
+    if (editingId && editInputRef.current) editInputRef.current.focus();
+  }, [editingId]);
 
   async function generateKey() {
     setGenLoading(true);
@@ -114,6 +138,69 @@ export default function AdminPage() {
     }
   }
 
+  async function addCategory() {
+    if (!newCatName.trim()) return;
+    setCatError('');
+    setAddingCat(true);
+    try {
+      const res = await apiFetch<{ category: Category }>('/admin/categorias', {
+        method: 'POST',
+        body: JSON.stringify({ name: newCatName.trim(), type: catTab }),
+      });
+      setCategories((prev) => [...prev, res.category].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewCatName('');
+    } catch (e) {
+      setCatError((e as Error).message);
+    } finally {
+      setAddingCat(false);
+    }
+  }
+
+  function startEdit(cat: Category) {
+    setEditingId(cat.id);
+    setEditName(cat.name);
+    setCatError('');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName('');
+    setCatError('');
+  }
+
+  async function saveEdit(id: string) {
+    if (!editName.trim()) return;
+    setCatError('');
+    try {
+      const res = await apiFetch<{ category: Category }>(`/admin/categorias/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editName.trim() }),
+      });
+      setCategories((prev) =>
+        prev.map((c) => (c.id === id ? res.category : c)).sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setEditingId(null);
+    } catch (e) {
+      setCatError((e as Error).message);
+    }
+  }
+
+  async function deleteCategory(cat: Category) {
+    const total = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases;
+    if (total > 0) {
+      setCatError(`"${cat.name}" está en uso en ${total} registro(s) y no se puede eliminar.`);
+      return;
+    }
+    if (!confirm(`¿Eliminar la categoría "${cat.name}"?`)) return;
+    setCatError('');
+    try {
+      await apiFetch(`/admin/categorias/${cat.id}`, { method: 'DELETE' });
+      setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+    } catch (e) {
+      setCatError((e as Error).message);
+    }
+  }
+
   function logout() {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
@@ -128,7 +215,7 @@ export default function AdminPage() {
     );
   }
 
-  const activeKey = key;
+  const filteredCats = categories.filter((c) => c.type === catTab);
 
   return (
     <div className="min-h-screen bg-surface text-on-surface">
@@ -189,7 +276,7 @@ export default function AdminPage() {
           <StatCard
             icon={BarChart2}
             label="Clave activa"
-            value={activeKey?.code ?? 'Sin clave'}
+            value={key?.code ?? 'Sin clave'}
             color="text-amber-600 dark:text-amber-400"
             bg="bg-amber-500/10"
             mono
@@ -207,10 +294,10 @@ export default function AdminPage() {
             Comparte este código con quienes deban crear cuenta. Genera uno nuevo para invalidar el anterior.
           </p>
 
-          {activeKey ? (
+          {key ? (
             <div className="space-y-3">
               <div className="flex gap-2">
-                {activeKey.code.split('').map((char, i) => (
+                {key.code.split('').map((char, i) => (
                   <div
                     key={i}
                     className="w-12 h-14 rounded-xl bg-secondary/10 border border-secondary/30 flex items-center justify-center text-2xl font-bold text-secondary font-mono tracking-widest select-all"
@@ -220,7 +307,7 @@ export default function AdminPage() {
                 ))}
               </div>
               <p className="text-xs text-on-surface-variant">
-                Generada el {fmtDate(activeKey.createdAt)}
+                Generada el {fmtDate(key.createdAt)}
               </p>
             </div>
           ) : (
@@ -242,6 +329,139 @@ export default function AdminPage() {
             <RefreshCw size={15} className={genLoading ? 'animate-spin' : ''} />
             {genLoading ? 'Generando...' : 'Generar nueva clave'}
           </button>
+        </section>
+
+        {/* ── Categories ──────────────────────────────────────────────────── */}
+        <section className="rounded-[24px] bg-surface-container border border-outline-variant/20 p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <Tag size={18} className="text-secondary" />
+            <h2 className="font-semibold text-base">Categorías</h2>
+            <span className="ml-auto text-xs text-on-surface-variant bg-surface-container-high px-2 py-1 rounded-full">
+              {categories.length} total
+            </span>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-2">
+            {(['INCOME', 'EXPENSE'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => { setCatTab(t); setCatError(''); setEditingId(null); }}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+                  catTab === t
+                    ? 'bg-secondary text-on-secondary'
+                    : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                {t === 'INCOME' ? 'Ingresos' : 'Egresos'}
+                <span className="ml-1.5 text-xs opacity-70">
+                  ({categories.filter((c) => c.type === t).length})
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {catError && (
+            <div className="rounded-xl bg-error-container border border-error/20 px-3 py-2.5 text-sm text-on-error-container flex items-center justify-between gap-2">
+              <span>{catError}</span>
+              <button onClick={() => setCatError('')}><X size={14} /></button>
+            </div>
+          )}
+
+          {/* Category list */}
+          <div className="space-y-1.5">
+            {filteredCats.length === 0 && (
+              <p className="text-sm text-on-surface-variant text-center py-6 italic">
+                Sin categorías de {catTab === 'INCOME' ? 'ingresos' : 'egresos'}.
+              </p>
+            )}
+            {filteredCats.map((cat) => {
+              const usage = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases;
+              const isEditing = editingId === cat.id;
+
+              return (
+                <div
+                  key={cat.id}
+                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-surface-container-high"
+                >
+                  {isEditing ? (
+                    <>
+                      <input
+                        ref={editInputRef}
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEdit(cat.id);
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                        className="flex-1 bg-surface rounded-lg px-3 py-1.5 text-sm text-on-surface border border-outline-variant/30 focus:outline-none focus:border-secondary"
+                      />
+                      <button
+                        onClick={() => saveEdit(cat.id)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-secondary/20 text-secondary hover:bg-secondary/30 transition"
+                        title="Guardar"
+                      >
+                        <Check size={13} />
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container transition text-on-surface-variant"
+                        title="Cancelar"
+                      >
+                        <X size={13} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm text-on-surface">{cat.name}</span>
+                      {usage > 0 && (
+                        <span className="text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full">
+                          {usage} uso{usage !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => startEdit(cat)}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition"
+                        title="Renombrar"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={() => deleteCategory(cat)}
+                        className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${
+                          usage > 0
+                            ? 'text-on-surface-variant/40 cursor-not-allowed'
+                            : 'text-on-surface-variant hover:bg-error-container hover:text-error'
+                        }`}
+                        title={usage > 0 ? 'En uso, no se puede eliminar' : 'Eliminar'}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add category */}
+          <div className="flex gap-2 pt-1">
+            <input
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addCategory(); }}
+              placeholder={`Nueva categoría de ${catTab === 'INCOME' ? 'ingresos' : 'egresos'}...`}
+              className="flex-1 bg-surface-container-high rounded-xl px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant border border-outline-variant/20 focus:outline-none focus:border-secondary"
+            />
+            <button
+              onClick={addCategory}
+              disabled={addingCat || !newCatName.trim()}
+              className="flex items-center gap-1.5 rounded-xl bg-secondary px-4 py-2.5 text-sm font-semibold text-on-secondary hover:opacity-90 transition disabled:opacity-50"
+            >
+              <Plus size={15} />
+              {addingCat ? 'Agregando...' : 'Agregar'}
+            </button>
+          </div>
         </section>
 
         {/* ── Users table ─────────────────────────────────────────────────── */}
@@ -321,6 +541,56 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+        </section>
+
+        {/* ── About ───────────────────────────────────────────────────────── */}
+        <section className="rounded-[24px] bg-surface-container border border-outline-variant/20 p-6 space-y-5">
+          <div className="flex items-center gap-3">
+            <Info size={18} className="text-secondary" />
+            <h2 className="font-semibold text-base">Acerca de</h2>
+          </div>
+
+          {/* App summary */}
+          <div className="rounded-2xl bg-secondary/10 border border-secondary/20 px-5 py-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className="text-secondary" />
+              <p className="font-bold text-secondary text-sm tracking-wide">Lumina Finance</p>
+            </div>
+            <p className="text-sm text-on-surface-variant leading-relaxed">
+              Aplicación de finanzas personales premium orientada al mercado colombiano (COP).
+              Permite gestionar ingresos, gastos, deudas, metas, presupuestos y tarjetas de crédito
+              con compras en cuotas — todo en un solo lugar, con dashboard inteligente, historial
+              filtrable y panel de administración.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {['Next.js 15', 'TypeScript', 'Prisma', 'PostgreSQL', 'Tailwind CSS v4', 'Docker'].map((t) => (
+                <span key={t} className="text-[11px] font-medium bg-secondary/15 text-secondary px-2.5 py-1 rounded-full">
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Developer */}
+          <div className="flex items-start gap-4 rounded-2xl bg-surface-container-high px-5 py-4">
+            <div className="w-14 h-14 shrink-0 rounded-full bg-primary/20 border-2 border-primary/30 flex items-center justify-center text-primary font-bold text-xl select-none">
+              D
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-on-surface">Diego Andrés De la Hoz Ballena</p>
+              <p className="text-xs text-secondary font-semibold uppercase tracking-wider">Ingeniero de Sistemas · 23 años</p>
+              <p className="text-sm text-on-surface-variant leading-relaxed pt-1">
+                Desarrollé Lumina Finance como proyecto personal para llevar el control de mis finanzas
+                de forma ordenada y visual. Quería una herramienta hecha a la medida del mercado colombiano,
+                con soporte para COP, tarjetas de crédito en cuotas y una experiencia de usuario premium.
+                Es también un espacio para explorar y aplicar tecnologías modernas de desarrollo web full-stack.
+              </p>
+            </div>
+          </div>
+
+          <p className="text-xs text-on-surface-variant text-center">
+            Versión 1.0 · 2026 · Hecho con dedicación 🇨🇴
+          </p>
         </section>
 
       </main>
