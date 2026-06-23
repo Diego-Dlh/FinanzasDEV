@@ -60,6 +60,7 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
   await prisma.$transaction([
+    prisma.cardPayment.deleteMany({ where: { cardId: id } }),
     prisma.cardPurchase.deleteMany({ where: { cardId: id } }),
     prisma.creditCard.delete({ where: { id } }),
   ]);

@@ -23,9 +23,26 @@ export async function POST(request: Request) {
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const { name, type, balance, currency } = await request.json();
+  const body = await request.json();
+  const { name, type, balance, currency } = body;
+
+  if (!name || !type) {
+    return NextResponse.json({ error: 'Nombre y tipo son requeridos' }, { status: 400 });
+  }
+
+  const validTypes = ['CASH', 'BANK', 'NEQUI', 'DAVIPLATA', 'CARD'];
+  if (!validTypes.includes(type)) {
+    return NextResponse.json({ error: 'Tipo de cuenta inválido' }, { status: 400 });
+  }
+
   const account = await prisma.account.create({
-    data: { userId, name, type, balance: Number(balance) || 0, currency: currency || 'COP' },
+    data: {
+      userId,
+      name,
+      type,
+      balance: Number(balance) || 0,
+      currency: currency || 'COP',
+    },
   });
   return NextResponse.json({ account }, { status: 201 });
 }

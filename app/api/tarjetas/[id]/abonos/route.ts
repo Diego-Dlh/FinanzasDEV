@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { cardPaymentSchema } from '@/lib/validators';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -29,10 +30,12 @@ export async function POST(request: Request, { params }: Params) {
   if (!card) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
   const body = await request.json();
-  const amount = Number(body.amount);
-  if (!amount || amount <= 0) {
-    return NextResponse.json({ error: 'El monto debe ser positivo' }, { status: 400 });
+  const parse = cardPaymentSchema.safeParse(body);
+  if (!parse.success) {
+    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
   }
+
+  const { amount, note, paidAt, accountId } = parse.data;
 
   if (amount > card.usedBalance) {
     return NextResponse.json(
@@ -41,7 +44,6 @@ export async function POST(request: Request, { params }: Params) {
     );
   }
 
-  const accountId = body.accountId as string | undefined;
   let account = null;
   if (accountId) {
     account = await prisma.account.findFirst({ where: { id: accountId, userId } });
@@ -62,8 +64,8 @@ export async function POST(request: Request, { params }: Params) {
         userId,
         cardId,
         amount,
-        note: body.note ?? null,
-        paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
+        note: note ?? null,
+        paidAt: paidAt ? new Date(paidAt) : new Date(),
       },
     }),
     prisma.creditCard.update({

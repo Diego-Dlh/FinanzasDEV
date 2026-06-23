@@ -7,8 +7,12 @@ export async function GET(request: Request) {
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
-  return NextResponse.json({ categories });
+  try {
+    const categories = await prisma.category.findMany({ orderBy: { name: 'asc' } });
+    return NextResponse.json({ categories });
+  } catch {
+    return NextResponse.json({ categories: [] });
+  }
 }
 
 export async function POST(request: Request) {
