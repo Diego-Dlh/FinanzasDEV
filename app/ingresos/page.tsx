@@ -11,6 +11,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
 import { Input, SelectField, Field, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 interface Category { id: string; name: string; type: string }
 interface Account { id: string; name: string; type: string; balance: number }
@@ -29,6 +30,7 @@ function fmt(n: number) {
 
 export default function IncomesPage() {
   const { user, isLoading } = useProtected();
+  const toast = useToast();
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -84,12 +86,15 @@ export default function IncomesPage() {
     try {
       if (editTarget) {
         await api.put(`/ingresos/${editTarget.id}`, data);
+        toast.success('Ingreso actualizado');
       } else {
         await api.post('/ingresos', data);
+        toast.success('Ingreso guardado');
       }
       setShowModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -100,7 +105,9 @@ export default function IncomesPage() {
     try {
       await api.delete(`/ingresos/${id}`);
       setIncomes((prev) => prev.filter((i) => i.id !== id));
+      toast.success('Ingreso eliminado');
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }

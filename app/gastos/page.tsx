@@ -11,6 +11,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
 import { Input, SelectField, Field, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 interface Category { id: string; name: string; type: string }
 interface Account { id: string; name: string }
@@ -29,6 +30,7 @@ function fmt(n: number) {
 
 export default function ExpensesPage() {
   const { user, isLoading } = useProtected();
+  const toast = useToast();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -85,12 +87,15 @@ export default function ExpensesPage() {
     try {
       if (editTarget) {
         await api.put(`/gastos/${editTarget.id}`, data);
+        toast.success('Gasto actualizado');
       } else {
         await api.post('/gastos', data);
+        toast.success('Gasto registrado');
       }
       setShowModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -101,7 +106,9 @@ export default function ExpensesPage() {
     try {
       await api.delete(`/gastos/${id}`);
       setExpenses((prev) => prev.filter((e) => e.id !== id));
+      toast.success('Gasto eliminado');
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }

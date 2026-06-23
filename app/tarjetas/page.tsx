@@ -11,6 +11,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
 import { Input, SelectField, Field, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 interface Category { id: string; name: string; type: string }
 interface Account { id: string; name: string; type: string; balance: number }
@@ -67,6 +68,7 @@ export default function TarjetasPage() {
   const [cards, setCards] = useState<CreditCardData[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const toast = useToast();
   const [abonoError, setAbonoError] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
@@ -141,12 +143,15 @@ export default function TarjetasPage() {
     try {
       if (editCard) {
         await api.put(`/tarjetas/${editCard.id}`, data);
+        toast.success('Tarjeta actualizada');
       } else {
         await api.post('/tarjetas', data);
+        toast.success('Tarjeta agregada');
       }
       setShowCardModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -157,8 +162,10 @@ export default function TarjetasPage() {
     try {
       await api.delete(`/tarjetas/${id}`);
       if (selectedCard?.id === id) setSelectedCard(null);
+      toast.success('Tarjeta eliminada');
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -182,8 +189,10 @@ export default function TarjetasPage() {
     try {
       await api.post(`/tarjetas/${selectedCard.id}/compras`, data);
       setShowPurchaseModal(false);
+      toast.success('Compra registrada');
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -231,6 +240,7 @@ export default function TarjetasPage() {
         accountId: data.accountId || undefined,
       });
       setShowAbonoModal(false);
+      toast.success('Abono registrado');
       await loadData();
     } catch (e) {
       setAbonoError((e as Error).message);
@@ -242,8 +252,10 @@ export default function TarjetasPage() {
     if (!confirm('¿Eliminar este abono? Se restaurará el saldo.')) return;
     try {
       await api.delete(`/tarjetas/${selectedCard.id}/abonos/${paymentId}`);
+      toast.success('Abono eliminado');
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
