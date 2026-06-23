@@ -56,7 +56,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const newBalance = Math.max(0, card.usedBalance - amount);
 
-  const ops: Parameters<typeof prisma.$transaction>[0] = [
+  const ops = [
     prisma.cardPayment.create({
       data: {
         userId,
@@ -70,15 +70,12 @@ export async function POST(request: Request, { params }: Params) {
       where: { id: cardId },
       data: { usedBalance: newBalance },
     }),
-  ];
+    ...(account && accountId
+      ? [prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })]
+      : []),
+  ] as const;
 
-  if (account && accountId) {
-    ops.push(
-      prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })
-    );
-  }
-
-  const [payment] = await prisma.$transaction(ops);
+  const [payment] = await prisma.$transaction([...ops]);
 
   return NextResponse.json({ payment }, { status: 201 });
 }
