@@ -1,6 +1,6 @@
 # LUMINA FINANCE — CONTEXTO COMPLETO DEL PROYECTO
 
-> Última actualización: 2026-06-22 (sesión 2). Documento de referencia para continuar desarrollo en nuevas sesiones de Claude.
+> Última actualización: 2026-06-23 (sesión 3). Documento de referencia para continuar desarrollo en nuevas sesiones de Claude.
 
 ---
 
@@ -63,6 +63,7 @@
 - **`field.tsx`**: `Input`, `SelectField`, `Field`, `FieldLabel`, `FieldError`, `Btn`
 - **`modal.tsx`**: Modal con props `title`, `subtitle?`, `onClose`. Fondo `bg-surface` (tema-aware, NO hardcodeado). Cierra con Escape, bloquea scroll
 - **`spinner.tsx`**: `Spinner`, `PageSpinner`
+- **`toast.tsx`**: `ToastProvider`, `useToast()`. Toasts apilables (máx 3), auto-dismiss 3.5s, slide-up. Variante `success` (secondary-container) y `error` (error-container). Posición: `bottom-24 right-4` mobile / `bottom-6 right-6` desktop
 
 ### Clases CSS custom
 - `.glass-card` — fondo semitransparente con blur
@@ -90,7 +91,9 @@ Usar siempre variables CSS del tema: `bg-surface`, `bg-surface-container`, `bg-s
 ### `app/providers.tsx`
 ```tsx
 <AuthProvider>
-  <ThemeProvider>{children}</ThemeProvider>
+  <ThemeProvider>
+    <ToastProvider>{children}</ToastProvider>
+  </ThemeProvider>
 </AuthProvider>
 ```
 
@@ -482,8 +485,9 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │           ├── cuentas/[id]/route.ts        # PUT + DELETE (con validación de uso)
 │           └── setup/route.ts
 ├── components/
-│   ├── ui/field.tsx + modal.tsx + spinner.tsx
+│   ├── ui/field.tsx + modal.tsx + spinner.tsx + toast.tsx
 │   │   # modal.tsx: bg-surface (NO bg-white hardcodeado)
+│   │   # toast.tsx: ToastProvider + useToast() — integrado en providers.tsx
 │   ├── layout/
 │   │   ├── topbar.tsx           # Settings modal con botón admin si user.isAdmin
 │   │   ├── bottomnav.tsx        # lg:hidden, 9 items con scroll
@@ -572,12 +576,15 @@ docker exec lumina_app npx prisma migrate status
 - **Página `/cuentas`**: desglose de cuentas con toggle ojo (hideFromTotal)
 - **Deudas**: total incluye tarjetas, calculadora de deudas, selector cuenta en pagos
 - **Pagos y abonos**: validan que no excedan el saldo de deuda/tarjeta ni de la cuenta origen
+- **Balance de cuentas**: se actualiza atómicamente (`$transaction`) al crear/editar/eliminar ingresos y gastos
+- **Toast global** (`useToast()`): feedback de éxito/error en todas las páginas CRUD
+- **Ingresos**: resumen muestra total real del mes actual (no solo `MONTHLY`)
+- **Presupuestos**: barra de progreso usa gasto real del mes por categoría (matching por nombre, case-insensitive)
 
 ### Bugs pendientes
 1. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
 2. **IA:** Función local sin LLM real
-3. **Balance de cuentas:** No se actualiza automáticamente al crear ingresos/gastos (solo al pagar deudas/abonos)
-4. **paidInstallments en compras:** El campo existe pero no se incrementa al hacer abonos a tarjetas
+3. **paidInstallments en compras:** El campo existe pero no se incrementa al hacer abonos a tarjetas
 
 ### Roadmap (desde `/about`)
 - v1.0–v1.3: completos ✓
@@ -609,6 +616,8 @@ const ops = [
 const [result] = await prisma.$transaction([...ops]);
 // ❌ NO usar ops.push() — genera union type que TypeScript rechaza en $transaction
 ```
+- **Toast:** importar `useToast` de `@/components/ui/toast`. Llamar `toast.success('msg')` o `toast.error('msg')` dentro de try/catch en handlers. El `ToastProvider` ya está en `providers.tsx`, no agregar de nuevo.
+
 - **Patron de página protegida:**
 ```tsx
 const { user, isLoading } = useProtected();
