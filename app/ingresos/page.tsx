@@ -115,6 +115,17 @@ export default function IncomesPage() {
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  const totalThisMonth = incomes
+    .filter((i) => {
+      const d = new Date(i.date);
+      return d >= startOfMonth && d <= endOfMonth;
+    })
+    .reduce((s, i) => s + i.amount, 0);
+
   const totalMonthly = incomes
     .filter((i) => i.frequency === 'MONTHLY')
     .reduce((s, i) => s + i.amount, 0);
@@ -132,9 +143,16 @@ export default function IncomesPage() {
         <div className="glass-card rounded-[24px] p-6 shadow-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">Total mensual</p>
-              <h2 className="mt-2 text-3xl font-bold text-secondary">{fmt(totalMonthly)}</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">{incomes.length} fuente{incomes.length !== 1 ? 's' : ''} registrada{incomes.length !== 1 ? 's' : ''}</p>
+              <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">
+                {now.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}
+              </p>
+              <h2 className="mt-2 text-3xl font-bold text-secondary">{fmt(totalThisMonth)}</h2>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                {incomes.length} fuente{incomes.length !== 1 ? 's' : ''} registrada{incomes.length !== 1 ? 's' : ''}
+                {totalMonthly > 0 && totalMonthly !== totalThisMonth && (
+                  <span className="ml-2 text-on-surface-variant/60">· {fmt(totalMonthly)} recurrente</span>
+                )}
+              </p>
             </div>
             <div className="h-16 w-16 rounded-3xl bg-secondary/10 flex items-center justify-center">
               <TrendingUp size={28} className="text-secondary" />
