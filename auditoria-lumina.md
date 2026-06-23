@@ -228,3 +228,57 @@ La app tiene una arquitectura sólida y un diseño de calidad. Sin embargo, en e
 4. **IA real**: Integrar Claude API (`claude-haiku-4-5-20251001`) en `/ia` para análisis financiero real.
 5. **Tests**: Agregar jest + @testing-library/react para los componentes críticos (formularios, modales de pago).
 
+---
+
+## FASE 2.5 — NUEVAS FUNCIONALIDADES (2026-06-23)
+
+> Evaluación como product engineer: ¿qué agrega valor real a una app de finanzas colombiana?
+> Criterios: **VALOR** (alto/medio/bajo) · **ESFUERZO** (alto/medio/bajo) · **ENCAJE** (sí/no)
+> Regla de corte: VALOR ≥ medio + ESFUERZO ≤ medio + ENCAJE sí → INTEGRAR
+
+### Tabla de evaluación
+
+| # | Candidata | VALOR | ESFUERZO | ENCAJE | Decisión | Razón |
+|---|-----------|-------|----------|--------|----------|-------|
+| F1 | Filtros avanzados en /ingresos y /gastos (búsqueda texto + mes) | Alto | Bajo | Sí | **INTEGRAR** | Las páginas actuales muestran todo sin filtrar; agregar buscador y selector de mes es cambio puramente de UI state, sin tocar API |
+| F2 | Exportar movimientos a CSV desde /historial | Alto | Bajo | Sí | **INTEGRAR** | Los contadores y el DIAN exigen registros descargables; la implementación es pure-frontend (Blob + anchor download), sin dependencias nuevas |
+| F3 | Alertas automáticas de vencimiento de deudas y tarjetas | Alto | Medio | Sí | **INTEGRAR** | Colombia cobra intereses de mora muy punitivoss; detectar deudas/tarjetas que vencen en 7 días y crear alertas via el sistema ya existente agrega recordatorio pasivo de alto valor |
+| F4 | Análisis visual de gastos por categoría en /gastos (donut chart) | Medio | Bajo | Sí | **Descartada** | /historial ya tiene este gráfico con mejor contexto (filtros de período); duplicarlo en /gastos sería redundante |
+| F5 | Duplicar / clonar transacciones | Bajo | Bajo | Sí | **Descartada** | Valor marginal; la frecuencia MONTHLY ya sirve para recurrentes; el esfuerzo es bajo pero el valor no justifica el scope |
+| F6 | Buscador global (búsqueda desde cualquier página) | Medio | Alto | Sí | **Descartada** | Requiere índice de texto completo en DB o lógica de búsqueda federada entre modelos; scope demasiado amplio para el valor relativo |
+| F7 | Recuperación de contraseña por email | Alto | Alto | Parcial | **REVISAR CON HUMANO** | Valor alto para usuarios reales; requiere servicio de email (Nodemailer + SMTP / SendGrid), tokens de reset en DB, y nueva página — cambio de infraestructura no trivial |
+| F8 | 2FA / historial de sesiones | Alto | Alto | No | **Descartada** | Cambio de arquitectura de autenticación completo; no encaja con el JWT-en-localStorage actual sin un rediseño significativo |
+| F9 | TRM del día (Tasa Representativa del Mercado, Banco de la República) | Medio | Bajo | Sí | **Descartada** | Útil solo para usuarios que cobran en USD; nicho pequeño en el contexto de la app; fácil de agregar más adelante como widget en dashboard |
+| F10 | Proyección de transacciones recurrentes (auto-generar MONTHLY/WEEKLY) | Alto | Alto | Sí | **REVISAR CON HUMANO** | El schema tiene `frequency` pero auto-generar requiere un cron job (o lógica de "proyección virtual"), decisiones de negocio sobre cutoff de fechas, y manejo de duplicados — no implementar a medias |
+| F11 | Resumen mensual exportable (estado de cuenta en PDF) | Medio | Alto | Sí | **Descartada** | PDF requiere librería pesada (puppeteer/jsPDF) y layout especial; el CSV de F2 cubre la necesidad básica de exportación |
+| F12 | Métricas de uso en panel admin (gráficos de actividad por usuario) | Medio | Medio | Sí | **Descartada** | Admin ya tiene stats básicas (usuarios, clave activa); métricas avanzadas tienen valor bajo en fase actual con pocos usuarios |
+| F13 | Ordenamiento de listas (por monto, fecha, categoría) | Medio | Bajo | Sí | **Descartada** | F1 (filtros) cubre la mayoría del problema de "encontrar algo específico"; el ordenamiento es mejora de segundo orden |
+| F14 | Importar transacciones desde CSV/Excel | Alto | Alto | Sí | **REVISAR CON HUMANO** | Altamente demandado por usuarios con historial en otras apps; requiere parser de CSV, mapeo de columnas, validación masiva y manejo de duplicados — no implementar a medias |
+| F15 | Vista de calendario de transacciones | Medio | Alto | Sí | **Descartada** | /historial ya cubre la narrativa temporal; un calendario completo requiere librería especializada y no agrega valor proporcional al esfuerzo |
+
+### Funciones seleccionadas para integrar
+
+| ID | Función | Estado |
+|----|---------|--------|
+| F1 | Filtros avanzados en /ingresos y /gastos | ✅ Integrada |
+| F2 | Exportar CSV desde /historial | ✅ Integrada |
+| F3 | Alertas automáticas de vencimiento | ✅ Integrada |
+
+### Para REVISAR CON HUMANO (no implementadas)
+
+| Candidata | Propuesta de abordaje |
+|-----------|----------------------|
+| **Recuperación de contraseña** | 1) Agregar modelo `PasswordReset { token, userId, expiresAt }` en schema. 2) `POST /api/auth/reset-request` genera token + envía email (Nodemailer con SMTP de Gmail/Resend). 3) `POST /api/auth/reset-confirm` valida token y actualiza password. 4) Página `/auth/reset/[token]`. Coordinar credenciales SMTP antes de implementar. |
+| **Proyección de recurrentes** | Decidir modelo: ¿"transacciones virtuales" que se muestran pero no se persisten?, ¿o auto-creación real con job? Recomiendo mostrar proyección visual en /presupuestos sin persistir. Requiere diseño de UX antes de tocar código. |
+| **Importar desde CSV** | Definir formato de columnas esperado (Fecha, Tipo, Descripción, Monto, Categoría, Cuenta). Implementar parser con `PapaParse`. Agregar página `/importar` con preview antes de confirmar. Mínimo 2 sesiones de trabajo. |
+
+---
+
+### LOG DE IMPLEMENTACIÓN FASE 2.5
+
+| Commit | Función | Archivos |
+|--------|---------|---------|
+| `429edfa` | F1: Filtros avanzados (búsqueda texto + selector mes) | `app/ingresos/page.tsx`, `app/gastos/page.tsx` |
+| `5e1faa8` | F2: Exportar CSV desde historial | `app/historial/page.tsx` |
+| `a0d1bfb` | F3: Alertas automáticas de vencimiento | `app/api/alertas/auto/route.ts`, `app/ClientLayout.tsx` |
+
