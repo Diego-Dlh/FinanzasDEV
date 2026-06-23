@@ -92,6 +92,7 @@ export default function DebtsPage() {
   }
 
   async function onSubmitDebt(data: DebtInput) {
+    setError('');
     try {
       if (editTarget) {
         await api.put(`/deudas/${editTarget.id}`, data);
@@ -107,6 +108,7 @@ export default function DebtsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar esta deuda y todos sus pagos?')) return;
+    setError('');
     try {
       await api.delete(`/deudas/${id}`);
       setDebts((prev) => prev.filter((d) => d.id !== id));

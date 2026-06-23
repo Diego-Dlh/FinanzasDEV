@@ -81,6 +81,7 @@ export default function ExpensesPage() {
   }
 
   async function onSubmit(data: ExpenseInput) {
+    setError('');
     try {
       if (editTarget) {
         await api.put(`/gastos/${editTarget.id}`, data);
@@ -96,6 +97,7 @@ export default function ExpensesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este gasto?')) return;
+    setError('');
     try {
       await api.delete(`/gastos/${id}`);
       setExpenses((prev) => prev.filter((e) => e.id !== id));

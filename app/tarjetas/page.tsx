@@ -137,6 +137,7 @@ export default function TarjetasPage() {
   }
 
   async function onCardSubmit(data: CreditCardInput) {
+    setError('');
     try {
       if (editCard) {
         await api.put(`/tarjetas/${editCard.id}`, data);
@@ -151,7 +152,8 @@ export default function TarjetasPage() {
   }
 
   async function handleDeleteCard(id: string) {
-    if (!confirm('¿Eliminar esta tarjeta y todas sus compras?')) return;
+    if (!confirm('¿Eliminar esta tarjeta y todas sus compras y abonos?')) return;
+    setError('');
     try {
       await api.delete(`/tarjetas/${id}`);
       if (selectedCard?.id === id) setSelectedCard(null);

@@ -80,6 +80,7 @@ export default function IncomesPage() {
   }
 
   async function onSubmit(data: IncomeInput) {
+    setError('');
     try {
       if (editTarget) {
         await api.put(`/ingresos/${editTarget.id}`, data);
@@ -95,6 +96,7 @@ export default function IncomesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este ingreso?')) return;
+    setError('');
     try {
       await api.delete(`/ingresos/${id}`);
       setIncomes((prev) => prev.filter((i) => i.id !== id));
