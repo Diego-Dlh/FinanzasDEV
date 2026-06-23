@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Wallet, Search, History } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Search, History, Download } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
@@ -105,6 +105,32 @@ export default function HistorialPage() {
       if (!categories.length) setCategories((catRes as { categories: Category[] }).categories);
     } catch { /* silencioso */ }
     finally { setLoading(false); }
+  }
+
+  function exportCSV() {
+    if (filtered.length === 0) return;
+    const headers = ['Fecha', 'Tipo', 'Descripción', 'Categoría', 'Cuenta', 'Monto COP'];
+    const rows = filtered.map((t) => [
+      new Date(t.date).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      t.type === 'INCOME' ? 'Ingreso' : 'Gasto',
+      t.label,
+      t.category,
+      t.account,
+      String(t.amount),
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    // BOM UTF-8 para que Excel abra con tildes correctas
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().split('T')[0];
+    const periodLabel = PERIODS.find((p) => p.key === period)?.label.toLowerCase().replace(' ', '-') ?? period;
+    a.download = `lumina-historial-${periodLabel}-${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   useEffect(() => { if (user) loadData(); }, [user, period, type, catId]);
@@ -286,18 +312,29 @@ export default function HistorialPage() {
 
         {/* ── Transaction list ──────────────────────────────────────────────── */}
         <div>
-          <div className="flex items-center justify-between mb-3 gap-4">
+          <div className="flex items-center justify-between mb-3 gap-4 flex-wrap">
             <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant shrink-0">
               Transacciones ({filtered.length})
             </p>
-            <div className="flex items-center gap-2 flex-1 max-w-xs rounded-2xl bg-surface-container px-3 py-2">
-              <Search size={14} className="text-on-surface-variant shrink-0" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar..."
-                className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant outline-none border-none"
-              />
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-1 max-w-xs rounded-2xl bg-surface-container px-3 py-2">
+                <Search size={14} className="text-on-surface-variant shrink-0" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar..."
+                  className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant outline-none border-none"
+                />
+              </div>
+              <button
+                onClick={exportCSV}
+                disabled={filtered.length === 0}
+                title="Exportar CSV"
+                className="flex items-center gap-1.5 rounded-2xl bg-surface-container px-3 py-2 text-xs font-semibold text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              >
+                <Download size={14} />
+                <span className="hidden sm:inline">Exportar</span>
+              </button>
             </div>
           </div>
 
