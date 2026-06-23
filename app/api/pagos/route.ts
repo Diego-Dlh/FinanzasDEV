@@ -56,18 +56,15 @@ export async function POST(request: Request) {
 
   const newBalance = Math.max(0, debt.balance - amount);
 
-  const ops: Parameters<typeof prisma.$transaction>[0] = [
+  const ops = [
     prisma.payment.create({ data: { userId, debtId, amount } }),
     prisma.debt.update({ where: { id: debtId }, data: { balance: newBalance } }),
-  ];
+    ...(account && accountId
+      ? [prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })]
+      : []),
+  ] as const;
 
-  if (account && accountId) {
-    ops.push(
-      prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })
-    );
-  }
-
-  const [payment] = await prisma.$transaction(ops);
+  const [payment] = await prisma.$transaction([...ops]);
 
   return NextResponse.json({ payment, newBalance }, { status: 201 });
 }
