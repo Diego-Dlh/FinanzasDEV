@@ -11,11 +11,16 @@ import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
 import { Input, Field, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 interface Budget { id: string; name: string; allocated: number; spent: number }
 interface Goal {
   id: string; title: string; description: string;
   targetAmount: number; currentAmount: number; targetDate: string;
+}
+interface Expense {
+  id: string; amount: number; date: string;
+  category: { name: string };
 }
 
 function fmt(n: number) {
@@ -39,8 +44,10 @@ function goalStatus(g: Goal): { label: string; color: string } {
 
 export default function BudgetPage() {
   const { user, isLoading } = useProtected();
+  const toast = useToast();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -61,12 +68,14 @@ export default function BudgetPage() {
 
   async function loadData() {
     try {
-      const [b, g] = await Promise.all([
+      const [b, g, exp] = await Promise.all([
         api.get<{ budgets: Budget[] }>('/presupuestos'),
         api.get<{ goals: Goal[] }>('/metas'),
+        api.get<{ expenses: Expense[] }>('/gastos'),
       ]);
       setBudgets(b.budgets);
       setGoals(g.goals);
+      setExpenses(exp.expenses);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -80,12 +89,15 @@ export default function BudgetPage() {
     try {
       if (editBudget) {
         await api.put(`/presupuestos/${editBudget.id}`, data);
+        toast.success('Presupuesto actualizado');
       } else {
         await api.post('/presupuestos', data);
+        toast.success('Presupuesto creado');
       }
       setShowBudgetModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -94,12 +106,15 @@ export default function BudgetPage() {
     try {
       if (editGoal) {
         await api.put(`/metas/${editGoal.id}`, data);
+        toast.success('Meta actualizada');
       } else {
         await api.post('/metas', data);
+        toast.success('Meta creada');
       }
       setShowGoalModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -111,26 +126,53 @@ export default function BudgetPage() {
         currentAmount: progressTarget.currentAmount + progressAmount,
       });
       setShowAddProgressModal(false);
+      toast.success('Progreso registrado');
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
 
   async function deleteBudget(id: string) {
     if (!confirm('¿Eliminar este presupuesto?')) return;
-    try { await api.delete(`/presupuestos/${id}`); setBudgets((p) => p.filter((b) => b.id !== id)); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      await api.delete(`/presupuestos/${id}`);
+      setBudgets((p) => p.filter((b) => b.id !== id));
+      toast.success('Presupuesto eliminado');
+    } catch (e) {
+      toast.error((e as Error).message);
+      setError((e as Error).message);
+    }
   }
 
   async function deleteGoal(id: string) {
     if (!confirm('¿Eliminar esta meta?')) return;
-    try { await api.delete(`/metas/${id}`); setGoals((p) => p.filter((g) => g.id !== id)); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      await api.delete(`/metas/${id}`);
+      setGoals((p) => p.filter((g) => g.id !== id));
+      toast.success('Meta eliminada');
+    } catch (e) {
+      toast.error((e as Error).message);
+      setError((e as Error).message);
+    }
   }
 
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  // Gastos del mes actual agrupados por categoría (lowercase para matching)
+  const spentByCategory: Record<string, number> = {};
+  for (const e of expenses) {
+    const d = new Date(e.date);
+    if (d < startOfMonth || d > endOfMonth) continue;
+    const key = e.category.name.toLowerCase();
+    spentByCategory[key] = (spentByCategory[key] ?? 0) + e.amount;
+  }
 
   return (
     <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
@@ -163,8 +205,10 @@ export default function BudgetPage() {
           ) : (
             <div className="space-y-3">
               {budgets.map((b) => {
-                const pct = b.allocated > 0 ? Math.min((b.spent / b.allocated) * 100, 100) : 0;
-                const over = b.spent > b.allocated;
+                const realSpent = spentByCategory[b.name.toLowerCase()] ?? null;
+                const displaySpent = realSpent !== null ? realSpent : b.spent;
+                const pct = b.allocated > 0 ? Math.min((displaySpent / b.allocated) * 100, 100) : 0;
+                const over = displaySpent > b.allocated;
                 const warning = pct >= 80 && !over;
                 return (
                   <div key={b.id} className="glass-card rounded-[24px] p-5 shadow-card">
@@ -175,7 +219,12 @@ export default function BudgetPage() {
                         </div>
                         <div>
                           <p className="font-semibold text-on-surface">{b.name}</p>
-                          <p className="text-xs text-on-surface-variant">{fmt(b.spent)} / {fmt(b.allocated)}</p>
+                          <p className="text-xs text-on-surface-variant">
+                            {fmt(displaySpent)} / {fmt(b.allocated)}
+                            {realSpent !== null && (
+                              <span className="ml-1 text-primary/70">(real)</span>
+                            )}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -196,7 +245,7 @@ export default function BudgetPage() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <p className="mt-1.5 text-xs text-on-surface-variant text-right">{pct.toFixed(0)}% usado · Disponible: {fmt(Math.max(0, b.allocated - b.spent))}</p>
+                    <p className="mt-1.5 text-xs text-on-surface-variant text-right">{pct.toFixed(0)}% usado · Disponible: {fmt(Math.max(0, b.allocated - displaySpent))}</p>
                   </div>
                 );
               })}

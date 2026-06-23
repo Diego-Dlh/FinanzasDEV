@@ -16,11 +16,18 @@ export async function PUT(
   const existing = await prisma.account.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  const account = await prisma.account.update({
-    where: { id },
-    data: {
-      ...(body.hideFromTotal !== undefined && { hideFromTotal: body.hideFromTotal }),
-    },
-  });
+  const updateData: {
+    hideFromTotal?: boolean;
+    name?: string;
+    balance?: number;
+    currency?: string;
+  } = {};
+
+  if (body.hideFromTotal !== undefined) updateData.hideFromTotal = Boolean(body.hideFromTotal);
+  if (body.name)                        updateData.name          = String(body.name);
+  if (body.balance !== undefined)       updateData.balance       = Number(body.balance);
+  if (body.currency)                    updateData.currency      = String(body.currency);
+
+  const account = await prisma.account.update({ where: { id }, data: updateData });
   return NextResponse.json({ account });
 }

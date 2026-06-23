@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { debtSchema } from '@/lib/validators';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -14,15 +15,20 @@ export async function PUT(request: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
   const body = await request.json();
+  const parse = debtSchema.partial().safeParse(body);
+  if (!parse.success) {
+    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+  }
+
   const debt = await prisma.debt.update({
     where: { id },
     data: {
-      name: body.name ?? existing.name,
-      entity: body.entity ?? existing.entity,
-      balance: body.balance !== undefined ? Number(body.balance) : existing.balance,
-      interestRate: body.interestRate !== undefined ? Number(body.interestRate) : existing.interestRate,
-      minPayment: body.minPayment !== undefined ? Number(body.minPayment) : existing.minPayment,
-      dueDate: body.dueDate ? new Date(body.dueDate) : existing.dueDate,
+      name:         parse.data.name         ?? existing.name,
+      entity:       parse.data.entity       ?? existing.entity,
+      balance:      parse.data.balance      ?? existing.balance,
+      interestRate: parse.data.interestRate ?? existing.interestRate,
+      minPayment:   parse.data.minPayment   ?? existing.minPayment,
+      dueDate:      parse.data.dueDate      ? new Date(parse.data.dueDate) : existing.dueDate,
     },
   });
   return NextResponse.json({ debt });
@@ -37,7 +43,10 @@ export async function DELETE(request: Request, { params }: Params) {
   const existing = await prisma.debt.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  await prisma.payment.deleteMany({ where: { debtId: id } });
-  await prisma.debt.delete({ where: { id } });
+  await prisma.$transaction([
+    prisma.payment.deleteMany({ where: { debtId: id } }),
+    prisma.debt.delete({ where: { id } }),
+  ]);
+
   return NextResponse.json({ ok: true });
 }

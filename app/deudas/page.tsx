@@ -12,6 +12,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
 import { Input, SelectField, Field, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 interface Debt {
   id: string; name: string; entity: string; balance: number;
@@ -52,6 +53,7 @@ export default function DebtsPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     useForm<PaymentInput>({ resolver: zodResolver(paymentSchema) as any });
 
+  const toast = useToast();
   const selectedAccountId = watchPayment('accountId');
   const paymentAmount = watchPayment('amount');
   const selectedAccount = accounts.find(a => a.id === selectedAccountId);
@@ -92,25 +94,32 @@ export default function DebtsPage() {
   }
 
   async function onSubmitDebt(data: DebtInput) {
+    setError('');
     try {
       if (editTarget) {
         await api.put(`/deudas/${editTarget.id}`, data);
+        toast.success('Deuda actualizada');
       } else {
         await api.post('/deudas', data);
+        toast.success('Deuda registrada');
       }
       setShowDebtModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar esta deuda y todos sus pagos?')) return;
+    setError('');
     try {
       await api.delete(`/deudas/${id}`);
       setDebts((prev) => prev.filter((d) => d.id !== id));
+      toast.success('Deuda eliminada');
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -141,6 +150,7 @@ export default function DebtsPage() {
         accountId: data.accountId || undefined,
       });
       setShowPaymentModal(false);
+      toast.success('Pago registrado');
       await loadData();
     } catch (e) {
       setPayError((e as Error).message);

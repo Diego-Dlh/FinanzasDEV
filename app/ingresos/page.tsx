@@ -11,6 +11,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
 import { Input, SelectField, Field, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 interface Category { id: string; name: string; type: string }
 interface Account { id: string; name: string; type: string; balance: number }
@@ -29,6 +30,7 @@ function fmt(n: number) {
 
 export default function IncomesPage() {
   const { user, isLoading } = useProtected();
+  const toast = useToast();
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -80,31 +82,49 @@ export default function IncomesPage() {
   }
 
   async function onSubmit(data: IncomeInput) {
+    setError('');
     try {
       if (editTarget) {
         await api.put(`/ingresos/${editTarget.id}`, data);
+        toast.success('Ingreso actualizado');
       } else {
         await api.post('/ingresos', data);
+        toast.success('Ingreso guardado');
       }
       setShowModal(false);
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('¿Eliminar este ingreso?')) return;
+    setError('');
     try {
       await api.delete(`/ingresos/${id}`);
       setIncomes((prev) => prev.filter((i) => i.id !== id));
+      toast.success('Ingreso eliminado');
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
 
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+  const totalThisMonth = incomes
+    .filter((i) => {
+      const d = new Date(i.date);
+      return d >= startOfMonth && d <= endOfMonth;
+    })
+    .reduce((s, i) => s + i.amount, 0);
 
   const totalMonthly = incomes
     .filter((i) => i.frequency === 'MONTHLY')
@@ -123,9 +143,16 @@ export default function IncomesPage() {
         <div className="glass-card rounded-[24px] p-6 shadow-card">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">Total mensual</p>
-              <h2 className="mt-2 text-3xl font-bold text-secondary">{fmt(totalMonthly)}</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">{incomes.length} fuente{incomes.length !== 1 ? 's' : ''} registrada{incomes.length !== 1 ? 's' : ''}</p>
+              <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">
+                {now.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}
+              </p>
+              <h2 className="mt-2 text-3xl font-bold text-secondary">{fmt(totalThisMonth)}</h2>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                {incomes.length} fuente{incomes.length !== 1 ? 's' : ''} registrada{incomes.length !== 1 ? 's' : ''}
+                {totalMonthly > 0 && totalMonthly !== totalThisMonth && (
+                  <span className="ml-2 text-on-surface-variant/60">· {fmt(totalMonthly)} recurrente</span>
+                )}
+              </p>
             </div>
             <div className="h-16 w-16 rounded-3xl bg-secondary/10 flex items-center justify-center">
               <TrendingUp size={28} className="text-secondary" />
