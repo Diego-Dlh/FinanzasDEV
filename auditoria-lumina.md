@@ -162,10 +162,69 @@ User, Account, Category (global), Income, Expense, Debt, Payment, Budget, Goal, 
 
 ## LOG DE COMMITS
 
-<!-- Se irá llenando -->
+| Hash | Mensaje |
+|------|---------|
+| `14dd973` | docs: auditoría inicial — mapa de estado y plan de mejoras |
+| `454da81` | feat: agregar ruta demo-login y botón acceso demo en login |
+| `688b689` | fix: validación Zod, try/catch y correcciones de integridad en API routes |
+| `60dd441` | ui: limpiar estado de error al iniciar acciones y mejorar mensajes |
+| `b596374` | fix: PUT y DELETE de ingresos/gastos ahora ajustan balance de cuenta |
+| `6a2c64e` | fix: corregir errores de tipos TypeScript (tsc --noEmit limpio) |
 
 ---
 
 ## RESUMEN FINAL
 
-<!-- Se llenará al cierre -->
+### Qué encontramos
+
+La app tiene una arquitectura sólida y un diseño de calidad. Sin embargo, en el estado previo a esta auditoría:
+
+1. **17 rutas API sin try/catch** en sus GETs — cualquier fallo de DB retornaba 500 con stack trace.
+2. **5 endpoints POST sin validación Zod** — datos maliciosos o incompletos llegaban directamente a Prisma.
+3. **El botón "Acceso demo" y la ruta `/api/demo-login`** prometidos en el CONTEXT.md no existían.
+4. **Bug en el cashflow del dashboard**: `recentIncomes/Expenses` tenían `take: 5`, haciendo que el gráfico de 7 días perdiera datos si había más de 5 transacciones.
+5. **2 DELETE sin transacción atómica**: deudas (pagos + deuda en secuencia) y tarjetas (no eliminaba CardPayments).
+6. **El balance de cuentas nunca se actualizaba** al crear/editar/eliminar ingresos y gastos.
+7. **`accountsCount` en dashboard** incluía cuentas ocultas (`hideFromTotal: true`).
+8. **`bg-white` hardcodeado** en el formulario de login — roto en dark mode.
+9. **Errores de estado** no se limpiaban al re-intentar acciones en páginas de ingresos, gastos, deudas y tarjetas.
+
+### Qué mejoramos (6 commits, todos en `agent/auditoria-20260623`)
+
+1. **feat**: Ruta `GET /api/demo-login` + botón en login page (con separador visual) + corrección `bg-white → bg-surface-container`.
+2. **fix** (API routes masivo):
+   - try/catch en GET de ingresos, gastos, deudas, presupuestos, metas, categorias, historial
+   - Validación Zod en POST de ingresos, gastos, deudas, presupuestos, metas, abonos, cuentas
+   - POST ingresos/gastos actualiza atomicamente el balance de la cuenta (increment/decrement)
+   - Dashboard cashflow: query separada sin límite `take`
+   - Dashboard `accountsCount`: solo cuentas con `hideFromTotal: false`
+   - Dashboard: try/catch con fallback a MOCK_DASHBOARD
+   - DELETE deudas: $transaction atómica
+   - DELETE tarjetas: incluye CardPayments y CardPurchases en la transacción
+   - Validación de enum en POST cuentas (AccountType)
+   - Currency default 'COP' en POST cuentas
+3. **ui**: `setError('')` al inicio de cada submit/delete en 4 páginas de CRUD.
+4. **fix** (balance): PUT y DELETE de ingresos/gastos ajustan balance de cuenta (con lógica para cambio de monto y/o cambio de cuenta).
+5. **fix** (TypeScript): Todos los errores de tipos corregidos. `npx tsc --noEmit` pasa limpio.
+
+### Qué decidimos NO hacer (REVISAR CON HUMANO)
+
+| Item | Razón |
+|------|-------|
+| **Rate limiting en login/register** | Requiere decisión de infraestructura: Upstash, Nginx, middleware propio. No implementar sin coordinar con el dueño del VPS. |
+| **JWT → httpOnly cookie** | Cambio de arquitectura significativo. Afecta toda la capa de auth, el demo mode y las llamadas API del cliente. |
+| **Password admin default 'Dlh2026'** | Está en código fuente. No tocamos credenciales; el usuario debe setear `ADMIN_PASSWORD` en `.env` antes de producción. |
+| **Ajuste de balance para datos históricos** | Los ingresos/gastos creados antes de esta auditoría no afectaron el balance. La corrección de datos existentes requiere una migración coordinada con el usuario. |
+| **`paidInstallments` en CardPurchase** | La lógica de cuotas pagadas implica decisiones de negocio no especificadas (¿se incrementa por abono parcial? ¿proporcional?). |
+| **Paginación de listas** | App personal con pocos usuarios; no urgente. Anotar para cuando supere 500+ registros por usuario. |
+| **Índices DB explícitos en `date`** | Requiere migración. Evaluar cuando el historial supere decenas de miles de registros. |
+| **`spent` en Budget auto-sync** | Requiere diseño: ¿qué gastos cuentan para qué presupuesto? La app no tiene una relación Budget↔Expense. Anotar para v2. |
+
+### Recomendaciones para el futuro
+
+1. **Migración de balance**: Crear un endpoint `GET /api/admin/recalcular-balances?key=SEED_KEY` que recorra todos los ingresos/gastos históricos y corrija los balances de las cuentas de cada usuario.
+2. **Rate limiting**: Agregar `X-RateLimit` en Nginx para `/api/auth/login` y `/api/auth/register` (máximo 10 req/min por IP).
+3. **SSL**: Completar la configuración Let's Encrypt con certbot para HTTPS en producción.
+4. **IA real**: Integrar Claude API (`claude-haiku-4-5-20251001`) en `/ia` para análisis financiero real.
+5. **Tests**: Agregar jest + @testing-library/react para los componentes críticos (formularios, modales de pago).
+
