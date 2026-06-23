@@ -25,34 +25,39 @@ export async function PUT(request: Request, { params }: Params) {
   const accountChanged = newAccountId !== existing.accountId;
   const amountChanged  = newAmount !== existing.amount;
 
-  const ops: Parameters<typeof prisma.$transaction>[0] = [
-    prisma.expense.update({
-      where: { id },
-      data: {
-        description: parse.data.description ?? existing.description,
-        amount:      newAmount,
-        categoryId:  parse.data.categoryId  ?? existing.categoryId,
-        accountId:   newAccountId,
-        date:        parse.data.date        ? new Date(parse.data.date) : existing.date,
-        frequency:   parse.data.frequency   ?? existing.frequency,
-      },
-    }),
-  ];
+  const expenseUpdate = prisma.expense.update({
+    where: { id },
+    data: {
+      description: parse.data.description ?? existing.description,
+      amount:      newAmount,
+      categoryId:  parse.data.categoryId  ?? existing.categoryId,
+      accountId:   newAccountId,
+      date:        parse.data.date        ? new Date(parse.data.date) : existing.date,
+      frequency:   parse.data.frequency   ?? existing.frequency,
+    },
+  });
 
   if (accountChanged) {
-    // Restore old account balance, deduct from new account
-    ops.push(
+    const ops = [
+      expenseUpdate,
       prisma.account.update({ where: { id: existing.accountId }, data: { balance: { increment: existing.amount } } }),
-      prisma.account.update({ where: { id: newAccountId },       data: { balance: { decrement: newAmount } } })
-    );
-  } else if (amountChanged) {
-    const diff = newAmount - existing.amount;
-    ops.push(
-      prisma.account.update({ where: { id: existing.accountId }, data: { balance: { decrement: diff } } })
-    );
+      prisma.account.update({ where: { id: newAccountId },       data: { balance: { decrement: newAmount } } }),
+    ] as const;
+    const [expense] = await prisma.$transaction([...ops]);
+    return NextResponse.json({ expense });
   }
 
-  const [expense] = await prisma.$transaction(ops);
+  if (amountChanged) {
+    const diff = newAmount - existing.amount;
+    const ops = [
+      expenseUpdate,
+      prisma.account.update({ where: { id: existing.accountId }, data: { balance: { decrement: diff } } }),
+    ] as const;
+    const [expense] = await prisma.$transaction([...ops]);
+    return NextResponse.json({ expense });
+  }
+
+  const expense = await expenseUpdate;
   return NextResponse.json({ expense });
 }
 

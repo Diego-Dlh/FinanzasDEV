@@ -44,7 +44,11 @@ const MOCK_DASHBOARD = {
   cashFlow: Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
-    return { name: d.toLocaleDateString('es-CO', { weekday: 'short' }), income: i === 0 ? 5_500_000 : 0, expense: i === 1 ? 1_200_000 : i === 3 ? 450_000 : 0 };
+    return {
+      name: d.toLocaleDateString('es-CO', { weekday: 'short' }),
+      income: i === 0 ? 5_500_000 : 0,
+      expense: i === 1 ? 1_200_000 : i === 3 ? 450_000 : 0,
+    };
   }),
   accountsCount: 3,
 };
@@ -57,76 +61,65 @@ export async function GET(request: Request) {
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(now.getDate() - 6);
     sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    const [accounts, monthlyIncomes, monthlyExpenses, debts, goals, recentTransactions, cashFlowIncomes, cashFlowExpenses, cards] =
-      await Promise.all([
-        prisma.account.findMany({ where: { userId } }),
-        prisma.income.findMany({
-          where: { userId, date: { gte: startOfMonth, lte: endOfMonth } },
-        }),
-        prisma.expense.findMany({
-          where: { userId, date: { gte: startOfMonth, lte: endOfMonth } },
-        }),
-        prisma.debt.findMany({ where: { userId } }),
-        prisma.goal.findMany({ where: { userId } }),
-        // Recent transactions (limited to 6 for the dashboard list)
-        Promise.all([
-          prisma.income.findMany({
-            where: { userId },
-            orderBy: { date: 'desc' },
-            take: 6,
-            include: { category: true },
-          }),
-          prisma.expense.findMany({
-            where: { userId },
-            orderBy: { date: 'desc' },
-            take: 6,
-            include: { category: true },
-          }),
-        ]),
-        // Cashflow: ALL incomes in the last 7 days (no take limit)
-        prisma.income.findMany({
-          where: { userId, date: { gte: sevenDaysAgo } },
-          include: { category: true },
-        }),
-        prisma.expense.findMany({
-          where: { userId, date: { gte: sevenDaysAgo } },
-          include: { category: true },
-        }),
-        prisma.creditCard.findMany({ where: { userId } }),
-      ]);
+    const [
+      accounts,
+      monthlyIncomes,
+      monthlyExpenses,
+      debts,
+      goals,
+      recentIncomes,
+      recentExpenses,
+      cashFlowIncomes,
+      cashFlowExpenses,
+      cards,
+    ] = await Promise.all([
+      prisma.account.findMany({ where: { userId } }),
+      prisma.income.findMany({ where: { userId, date: { gte: startOfMonth, lte: endOfMonth } } }),
+      prisma.expense.findMany({ where: { userId, date: { gte: startOfMonth, lte: endOfMonth } } }),
+      prisma.debt.findMany({ where: { userId } }),
+      prisma.goal.findMany({ where: { userId } }),
+      prisma.income.findMany({
+        where: { userId },
+        orderBy: { date: 'desc' },
+        take: 6,
+        include: { category: true },
+      }),
+      prisma.expense.findMany({
+        where: { userId },
+        orderBy: { date: 'desc' },
+        take: 6,
+        include: { category: true },
+      }),
+      // Cashflow: all incomes of the last 7 days — no take limit
+      prisma.income.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
+      prisma.expense.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
+      prisma.creditCard.findMany({ where: { userId } }),
+    ]);
 
-    const [recentIncomes, recentExpenses] = recentTransactions;
-
-    const totalBalance = accounts.filter(a => !a.hideFromTotal).reduce((s, a) => s + a.balance, 0);
-    const visibleAccountsCount = accounts.filter(a => !a.hideFromTotal).length;
-    const totalMonthlyIncome = monthlyIncomes.reduce((s, i) => s + i.amount, 0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const totalBalance        = (accounts as any[]).filter((a) => !a.hideFromTotal).reduce((s: number, a: any) => s + a.balance, 0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const visibleAccountsCount = (accounts as any[]).filter((a) => !a.hideFromTotal).length;
+    const totalMonthlyIncome  = monthlyIncomes.reduce((s, i) => s + i.amount, 0);
     const totalMonthlyExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
-    const cardDebt = cards.reduce((s, c) => s + c.usedBalance, 0);
-    const totalDebt = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
-    const netWorth = totalBalance - totalDebt;
-    const healthScore = calcHealthScore(totalMonthlyIncome, totalMonthlyExpenses, totalDebt, goals.length);
+    const cardDebt            = cards.reduce((s, c) => s + c.usedBalance, 0);
+    const totalDebt           = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
+    const netWorth            = totalBalance - totalDebt;
+    const healthScore         = calcHealthScore(totalMonthlyIncome, totalMonthlyExpenses, totalDebt, goals.length);
 
     const transactions = [
       ...recentIncomes.map((i) => ({
-        id: i.id,
-        title: i.name,
-        category: i.category.name,
-        amount: i.amount,
-        type: 'income' as const,
-        date: i.date,
+        id: i.id, title: i.name, category: i.category.name,
+        amount: i.amount, type: 'income' as const, date: i.date,
       })),
       ...recentExpenses.map((e) => ({
-        id: e.id,
-        title: e.description,
-        category: e.category.name,
-        amount: e.amount,
-        type: 'expense' as const,
-        date: e.date,
+        id: e.id, title: e.description, category: e.category.name,
+        amount: e.amount, type: 'expense' as const, date: e.date,
       })),
     ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -141,7 +134,7 @@ export async function GET(request: Request) {
     const cashFlow = last7Days.map((day) => {
       const dayStr = day.toLocaleDateString('es-CO', { weekday: 'short' });
       const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-      const end = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
+      const end   = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
       const inc = cashFlowIncomes
         .filter((i) => new Date(i.date) >= start && new Date(i.date) <= end)
         .reduce((s, i) => s + i.amount, 0);
