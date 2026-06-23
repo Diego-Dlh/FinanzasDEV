@@ -177,7 +177,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | createdAt / updatedAt | DateTime | |
 | Relaciones | incomes, expenses, debts, budgets, goals, payments, accounts, alerts, settings?, creditCards, cardPurchases, cardPayments | |
 
-**`Account`** — type: CASH/BANK/NEQUI/DAVIPLATA/CARD · currency default "COP"
+**`Account`** — type: CASH/BANK/NEQUI/DAVIPLATA/CARD · currency default "COP" · `hideFromTotal Boolean @default(false)` — si true, la cuenta se excluye del Saldo Disponible en dashboard y `/cuentas`
 
 **`Category`** — global (sin userId), todos comparten el catálogo · Relaciones: incomes[], expenses[], cardPurchases[]
 
@@ -240,9 +240,10 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 
 ### Migraciones aplicadas
 ```
-20260617210000_add_credit_cards      → CreditCard + CardPurchase
-20260621000000_add_card_payments     → CardPayment
-20260622000001_add_admin             → User.isAdmin + RegistrationKey
+20260617210000_add_credit_cards          → CreditCard + CardPurchase
+20260621000000_add_card_payments         → CardPayment
+20260622000001_add_admin                 → User.isAdmin + RegistrationKey
+20260622000002_account_hide_from_total   → Account.hideFromTotal Boolean DEFAULT false
 ```
 
 ---
@@ -263,10 +264,17 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 ### Dashboard
 | Ruta | Descripción |
 |------|-------------|
-| `GET /api/dashboard` | totalBalance, monthlyIncome, monthlyExpenses, totalDebt, netWorth, healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Si DB falla → retorna MOCK_DASHBOARD con datos de ejemplo en COP** |
+| `GET /api/dashboard` | totalBalance (solo cuentas con `hideFromTotal: false`), monthlyIncome, monthlyExpenses, totalDebt (deudas + tarjetas), netWorth, healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Si DB falla → retorna MOCK_DASHBOARD con datos de ejemplo en COP** |
 
-### Ingresos / Gastos / Deudas / Presupuestos / Metas / Pagos / Categorías / Cuentas
+### Ingresos / Gastos / Deudas / Presupuestos / Metas / Categorías
 GET de cada ruta retorna array vacío si DB no disponible.
+
+### Cuentas
+| Ruta | Método | Descripción |
+|------|--------|-------------|
+| `GET /api/cuentas` | GET | Lista cuentas del usuario. Si DB falla → `{ accounts: [] }` |
+| `POST /api/cuentas` | POST | Crea cuenta |
+| `PUT /api/cuentas/[id]` | PUT | Actualiza cuenta. Body: `{ hideFromTotal?: boolean }` — solo campos enviados se actualizan. Valida que la cuenta pertenezca al userId antes de actualizar |
 
 ### Alertas
 | Ruta | Método | Descripción |
@@ -291,7 +299,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `GET/POST /api/tarjetas/[id]/compras` | — | Lista / crea compra |
 | `DELETE /api/tarjetas/[id]/compras/[purchaseId]` | — | Elimina compra, decrementa usedBalance |
 | `GET /api/tarjetas/[id]/abonos` | GET | Lista abonos de la tarjeta |
-| `POST /api/tarjetas/[id]/abonos` | POST | Registra abono: decrementa usedBalance |
+| `POST /api/tarjetas/[id]/abonos` | POST | Registra abono: decrementa usedBalance. Body: `{ amount, note?, paidAt, accountId? }`. Valida: amount ≤ usedBalance; si accountId → amount ≤ account.balance. Si accountId → decrementa account.balance en la misma $transaction |
 | `DELETE /api/tarjetas/[id]/abonos/[paymentId]` | DELETE | Elimina abono, restaura usedBalance |
 
 ### Historial
@@ -318,6 +326,12 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `DELETE /api/admin/cuentas/[id]` | DELETE | Elimina si no tiene transacciones. Error 409 si hay registros |
 | `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY`. Idempotente. Crea/actualiza admin@luminafi.com con isAdmin:true |
 
+### Pagos de deudas
+| Ruta | Método | Descripción |
+|------|--------|-------------|
+| `GET /api/pagos` | GET | Lista pagos, filtro opcional `?debtId=` |
+| `POST /api/pagos` | POST | Registra pago. Body: `{ debtId, amount, accountId? }`. Valida: amount ≤ debt.balance; si accountId → amount ≤ account.balance. Si accountId → decrementa account.balance en la misma $transaction |
+
 ### Utilidades
 | Ruta | Descripción |
 |------|-------------|
@@ -330,22 +344,39 @@ GET de cada ruta retorna array vacío si DB no disponible.
 ## 8. Páginas (todas)
 
 ### `/` — Dashboard
-- Health score SVG circular, Wealth card gradiente negro, 4 overview cards scroll horizontal, CashFlow chart (Recharts BarChart), transacciones recientes
+- Health score SVG circular, **Wealth card** gradiente negro siempre oscuro (clickeable → `/cuentas`), **3** overview cards scroll horizontal (Ingresos, Gastos, Total Deuda — **Patrimonio eliminado**), CashFlow chart, transacciones recientes
+- **Wealth card:** usa `text-white/70` para labels (NUNCA `text-on-primary-container` — en modo claro esa variable es oscura y queda ilegible sobre fondo negro)
+- **totalBalance** solo suma cuentas con `hideFromTotal: false`
 - **Si DB no disponible:** muestra datos mock (salario 5.5M COP, arriendo, etc.)
+
+### `/cuentas` — Mis Cuentas (página nueva)
+- Accesible únicamente desde el Wealth card del dashboard (no está en sidebar/bottomnav)
+- Muestra: card con saldo total visible + contador "X de Y cuentas incluidas"
+- Lista todas las cuentas con icono por tipo (CASH→Wallet, BANK→Building2, NEQUI/DAVIPLATA→Smartphone, CARD→CreditCard), nombre, tipo y balance
+- Botón ojo (`Eye`/`EyeOff`) por cuenta: toggle optimista de `hideFromTotal`, con rollback si falla la API
+- Cuentas excluidas: atenuadas (opacity-60) con balance tachado
 
 ### `/historial` — Historial
 - Filtros período/tipo/categoría, bar chart mensual, donut por categoría, lista con búsqueda
 
-### `/ingresos`, `/gastos`, `/deudas`, `/presupuestos`, `/ia`, `/calculadoras`
-- Sin cambios estructurales
+### `/deudas` — Deudas
+- **Total deuda = deudas directas + saldo usado de tarjetas de crédito** (desglose en dos sub-cards)
+- **Calculadora de deudas** (reemplazó el Planificador): inputs monto, tasa (toggle mensual/anual), meses → resultado en tiempo real: cuota mensual, total a pagar, total en intereses. Fórmula: `cuota = P*r*(1+r)^n / ((1+r)^n - 1)`
+- **Tarjetas de crédito** aparecen como sección en el listado (read-only, clickeable → `/tarjetas`)
+- **Modal de pago:** selector de cuenta con preview saldo resultante; valida client-side que amount ≤ debt.balance y amount ≤ account.balance
+- Carga: `/deudas` + `/tarjetas` + `/cuentas` en paralelo
 
 ### `/tarjetas` — Tarjetas de Crédito
 - Vista lista + vista detalle con sección "Abonos"
+- **Modal de abono:** ahora incluye selector de cuenta (opcional). Valida client-side que amount ≤ card.usedBalance y amount ≤ account.balance
+- Carga: `/tarjetas` + `/categorias` + `/cuentas` en paralelo
 
 ### `/about` — Acerca de (`app/about/page.tsx`)
 - **Página protegida** (requiere login), con sidebar/bottomnav normal
 - Secciones: Hero app, grid 8 funcionalidades, roadmap v1.0→v1.6, tarjeta desarrollador, stack tecnológico, card open source v1.6
-- **BUG PENDIENTE:** `Github` icon no existe en lucide-react v1.20.0 — debe reemplazarse por `ExternalLink` en el import y en todos los usos dentro de la página
+- **Sin emojis** — el 🇨🇴 fue eliminado del hero y del footer
+- Footer: `Versión 1.3 · 2026 · Hecho con dedicación en Colombia por Diego De la Hoz`
+- Icono GitHub → usa `GitBranch` (el linter lo convirtió desde `ExternalLink`; `Github` no existe en v1.20.0)
 
 ### `/auth/login` — Login
 - Form con `noValidate`, fondo `bg-surface-container` (tema-aware)
@@ -379,10 +410,10 @@ expenseSchema         // description, amount, categoryId, accountId, date, frequ
 debtSchema            // name, entity, balance, interestRate, minPayment, dueDate
 budgetSchema          // name, allocated
 goalSchema            // title, description, targetAmount, currentAmount, targetDate
-paymentSchema         // debtId, amount
+paymentSchema         // debtId, amount, accountId? (optional — descuenta de cuenta si se envía)
 creditCardSchema      // name, bank, creditLimit, interestRate, dueDay, cutDay, currency
 cardPurchaseSchema    // description, categoryId, totalAmount, installments, date
-cardPaymentSchema     // amount (positive), note (optional), paidAt (date string)
+cardPaymentSchema     // amount (positive), note (optional), paidAt (date string), accountId? (optional)
 changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine match)
 ```
 
@@ -399,17 +430,18 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │   ├── ClientLayout.tsx         # 'use client' — Sidebar + lg:pl-60 (excepto /admin, /auth)
 │   ├── providers.tsx            # AuthProvider + ThemeProvider
 │   ├── globals.css              # Tailwind v4, @theme, dark mode vars, .glass-card
-│   ├── page.tsx                 # Dashboard
-│   ├── about/page.tsx           # Acerca de — ⚠️ BUG: Github icon → reemplazar con ExternalLink
+│   ├── page.tsx                 # Dashboard — Wealth card clickeable → /cuentas
+│   ├── cuentas/page.tsx         # Desglose de cuentas con toggle hideFromTotal (ojo)
+│   ├── about/page.tsx           # Acerca de — sin emojis, footer actualizado, GitBranch icon
 │   ├── historial/page.tsx       # Historial con filtros + charts + lista
-│   ├── tarjetas/page.tsx        # CreditCards + abonos
+│   ├── tarjetas/page.tsx        # CreditCards + abonos (con selector de cuenta)
+│   ├── deudas/page.tsx          # Deudas + tarjetas en total + calculadora + selector cuenta
 │   ├── admin/page.tsx           # Panel admin (tema-aware, standalone, con categorías y cuentas)
 │   ├── auth/
 │   │   ├── login/page.tsx       # noValidate, bg-surface-container, botón demo
 │   │   └── register/page.tsx    # Campo registrationKey
 │   ├── ingresos/page.tsx
 │   ├── gastos/page.tsx
-│   ├── deudas/page.tsx
 │   ├── presupuestos/page.tsx
 │   ├── ia/page.tsx
 │   ├── calculadoras/page.tsx
@@ -418,15 +450,16 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │       ├── auth/register/route.ts       # Valida registrationKey
 │       ├── auth/cambiar-password/route.ts
 │       ├── demo-login/route.ts          # GET sin DB, solo dev
-│       ├── dashboard/route.ts           # try/catch con MOCK_DASHBOARD
+│       ├── dashboard/route.ts           # totalBalance filtra hideFromTotal; MOCK_DASHBOARD si DB falla
 │       ├── ingresos/route.ts + [id]/    # GET con try/catch → []
 │       ├── gastos/route.ts + [id]/      # GET con try/catch → []
 │       ├── deudas/route.ts + [id]/      # GET con try/catch → []
 │       ├── presupuestos/route.ts + [id]/# GET con try/catch → []
 │       ├── metas/route.ts + [id]/       # GET con try/catch → []
-│       ├── pagos/route.ts
+│       ├── pagos/route.ts               # POST valida amount≤balance y descuenta cuenta opcional
 │       ├── categorias/route.ts          # GET con try/catch → []
 │       ├── cuentas/route.ts             # GET con try/catch → []
+│       ├── cuentas/[id]/route.ts        # PUT: actualiza hideFromTotal (valida userId con findFirst)
 │       ├── alertas/route.ts + [id]/     # GET con try/catch → {alerts:[], unreadCount:0}
 │       ├── configuracion/route.ts       # GET con try/catch → default setting
 │       ├── historial/route.ts           # try/catch → vacío
@@ -436,7 +469,7 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │       ├── tarjetas/[id]/route.ts
 │       ├── tarjetas/[id]/compras/route.ts
 │       ├── tarjetas/[id]/compras/[purchaseId]/route.ts
-│       ├── tarjetas/[id]/abonos/route.ts
+│       ├── tarjetas/[id]/abonos/route.ts      # POST valida amount≤usedBalance y descuenta cuenta
 │       ├── tarjetas/[id]/abonos/[paymentId]/route.ts
 │       └── admin/
 │           ├── me/route.ts
@@ -470,7 +503,8 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │   └── migrations/
 │       ├── .../20260617210000_add_credit_cards/
 │       ├── .../20260621000000_add_card_payments/
-│       └── .../20260622000001_add_admin/
+│       ├── .../20260622000001_add_admin/
+│       └── .../20260622000002_account_hide_from_total/
 └── [docker, nginx, scripts — sin cambios]
 ```
 
@@ -520,12 +554,12 @@ docker exec lumina_app npx prisma migrate status
 
 ---
 
-## 13. Estado actual del proyecto (2026-06-22 sesión 2)
+## 13. Estado actual del proyecto (2026-06-23 sesión 3)
 
 ### Funcional
 - CRUD: ingresos, gastos, deudas, presupuestos, metas
-- Tarjetas de crédito con compras en cuotas + abonos
-- Dashboard con health score, cashflow chart
+- Tarjetas de crédito con compras en cuotas + abonos (con selector de cuenta origen)
+- Dashboard con health score, cashflow chart; Wealth card clickeable → `/cuentas`
 - Historial con filtros/charts
 - TopBar: settings modal con botón admin (si isAdmin), dark mode, cambiar contraseña, notificaciones
 - Dark mode completo con anti-FOUC
@@ -534,14 +568,16 @@ docker exec lumina_app npx prisma migrate status
 - Botón admin en settings modal del TopBar (solo visible si isAdmin)
 - Registro controlado con clave de acceso
 - Demo mode: botón en login, JWT sin DB, todas las rutas GET toleran fallo de DB
-- Página `/about` con roadmap, features, perfil del desarrollador
+- Página `/about` con roadmap, features, perfil del desarrollador (sin emojis)
+- **Página `/cuentas`**: desglose de cuentas con toggle ojo (hideFromTotal)
+- **Deudas**: total incluye tarjetas, calculadora de deudas, selector cuenta en pagos
+- **Pagos y abonos**: validan que no excedan el saldo de deuda/tarjeta ni de la cuenta origen
 
 ### Bugs pendientes
-1. **`app/about/page.tsx`**: importa `Github` de lucide-react — ese icon NO existe en v1.20.0. Debe reemplazarse `Github` → `ExternalLink` en el import y en todos los JSX donde se usa (hay ~3 ocurrencias)
-2. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
-3. **IA:** Función local sin LLM real
-4. **Balance de cuentas:** No se actualiza automáticamente al crear ingresos/gastos
-5. **paidInstallments en compras:** El campo existe pero no se actualiza al hacer abonos
+1. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
+2. **IA:** Función local sin LLM real
+3. **Balance de cuentas:** No se actualiza automáticamente al crear ingresos/gastos (solo al pagar deudas/abonos)
+4. **paidInstallments en compras:** El campo existe pero no se incrementa al hacer abonos a tarjetas
 
 ### Roadmap (desde `/about`)
 - v1.0–v1.3: completos ✓
@@ -561,7 +597,18 @@ docker exec lumina_app npx prisma migrate status
 - **Fechas en inputs:** `new Date(item.date).toISOString().split('T')[0]`
 - **Forms con email:** siempre `noValidate` en el `<form>`
 - **NO usar colores hardcodeados** — siempre variables CSS del tema
-- **Lucide icons:** `Github` no existe en v1.20.0, usar `ExternalLink`
+- **Cards con fondo siempre oscuro (gradiente negro):** usar `text-white/70` para labels, NO `text-on-primary-container` ni `text-secondary-fixed-dim` — esos tokens son oscuros en modo claro y quedan ilegibles sobre fondo negro
+- **Lucide icons:** `Github` NO existe en v1.20.0. En `about/page.tsx` se usa `GitBranch` para el link de GitHub. Para links externos genéricos usar `ExternalLink`
+- **Prisma `$transaction` con ops condicionales** — patrón correcto (evita error de tipos TypeScript):
+```ts
+const ops = [
+  prisma.model.create({ data: { ... } }),
+  prisma.model.update({ where: { id }, data: { ... } }),
+  ...(condition ? [prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })] : []),
+] as const;
+const [result] = await prisma.$transaction([...ops]);
+// ❌ NO usar ops.push() — genera union type que TypeScript rechaza en $transaction
+```
 - **Patron de página protegida:**
 ```tsx
 const { user, isLoading } = useProtected();
@@ -588,9 +635,6 @@ Tengo una app Next.js 15 llamada Lumina Finance. Lee el archivo CONTEXT.md en la
 La app está corriendo en local con `npm run dev` (http://localhost:3000). Si hay errores de hydration o el servidor está caído, el comando para reiniciar limpio es: `rm -rf .next && npm run dev`
 
 Para entrar a la app sin base de datos: ir a /auth/login y usar el botón "Acceso demo (sin base de datos)".
-
-BUG PRIORITARIO a resolver al inicio de sesión:
-- `app/about/page.tsx` tiene `import { ..., Github, ... } from 'lucide-react'` — ese icon NO existe en v1.20.0. Reemplazar `Github` por `ExternalLink` en el import y en todos los lugares donde se usa en el JSX (buscar con grep).
 
 Espera la siguiente instrucción.
 ```
