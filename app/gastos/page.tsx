@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2, TrendingDown, Pencil } from 'lucide-react';
+import { Plus, Trash2, TrendingDown, Pencil, Search } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
 import { expenseSchema, type ExpenseInput } from '@/lib/validators';
@@ -28,6 +28,12 @@ function fmt(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
 
+function fmtMonthLabel(ym: string) {
+  const [year, month] = ym.split('-');
+  const names = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  return `${names[parseInt(month) - 1]} ${year}`;
+}
+
 export default function ExpensesPage() {
   const { user, isLoading } = useProtected();
   const toast = useToast();
@@ -39,6 +45,10 @@ export default function ExpensesPage() {
   const [editTarget, setEditTarget] = useState<Expense | null>(null);
   const [filterCat, setFilterCat] = useState('');
   const [error, setError] = useState('');
+
+  const currentMonth = new Date().toISOString().substring(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [search, setSearch] = useState('');
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -62,6 +72,31 @@ export default function ExpensesPage() {
   }
 
   useEffect(() => { if (user) loadData(); }, [user]);
+
+  // Meses disponibles según los datos cargados
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set(expenses.map((e) => e.date.substring(0, 7)));
+    return Array.from(monthSet).sort().reverse();
+  }, [expenses]);
+
+  // Lista filtrada por mes, categoría y búsqueda
+  const filtered = useMemo(() => {
+    return expenses.filter((e) => {
+      const inMonth = selectedMonth === 'all' || e.date.startsWith(selectedMonth);
+      const inCat = !filterCat || e.category.id === filterCat;
+      const q = search.toLowerCase();
+      const inSearch = !q
+        || e.description.toLowerCase().includes(q)
+        || e.category.name.toLowerCase().includes(q)
+        || e.account.name.toLowerCase().includes(q);
+      return inMonth && inCat && inSearch;
+    });
+  }, [expenses, selectedMonth, filterCat, search]);
+
+  const filteredTotal = useMemo(
+    () => filtered.reduce((s, e) => s + e.amount, 0),
+    [filtered],
+  );
 
   function openAdd() {
     setEditTarget(null);
@@ -116,8 +151,7 @@ export default function ExpensesPage() {
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
-  const filtered = filterCat ? expenses.filter((e) => e.category.id === filterCat) : expenses;
-  const totalMonth = filtered.reduce((s, e) => s + e.amount, 0);
+  const hasActiveFilters = !!search || !!filterCat || selectedMonth !== currentMonth;
 
   return (
     <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
@@ -133,10 +167,10 @@ export default function ExpensesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">Total gastos</p>
-              <h2 className="mt-2 text-3xl font-bold text-error">{fmt(totalMonth)}</h2>
+              <h2 className="mt-2 text-3xl font-bold text-error">{fmt(filteredTotal)}</h2>
               <p className="mt-1 text-sm text-on-surface-variant">
                 {filtered.length} transacción{filtered.length !== 1 ? 'es' : ''}
-                {filterCat ? ' (filtrado)' : ' registradas'}
+                {hasActiveFilters ? ' (filtrado)' : ' registradas'}
               </p>
             </div>
             <div className="h-16 w-16 rounded-3xl bg-error/10 flex items-center justify-center">
@@ -145,9 +179,26 @@ export default function ExpensesPage() {
           </div>
         </div>
 
-        {/* Filter + Add */}
-        <div className="flex gap-3">
-          <div className="flex-1">
+        {/* Filters + Add */}
+        <div className="space-y-3">
+          {/* Search + Add */}
+          <div className="flex gap-3">
+            <div className="flex items-center gap-2 flex-1 rounded-2xl bg-surface-container px-3 py-2.5">
+              <Search size={14} className="text-on-surface-variant shrink-0" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por descripción..."
+                className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant outline-none border-none"
+              />
+            </div>
+            <Btn variant="danger" size="md" icon={<Plus size={16} />} onClick={openAdd}>
+              Agregar
+            </Btn>
+          </div>
+
+          {/* Category + Month */}
+          <div className="grid grid-cols-2 gap-3">
             <SelectField
               value={filterCat}
               onChange={(e) => setFilterCat(e.target.value)}
@@ -155,17 +206,28 @@ export default function ExpensesPage() {
               <option value="">Todas las categorías</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </SelectField>
+
+            <SelectField
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              <option value="all">Todos los meses</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>{fmtMonthLabel(m)}</option>
+              ))}
+            </SelectField>
           </div>
-          <Btn variant="danger" size="md" icon={<Plus size={16} />} onClick={openAdd}>
-            Agregar
-          </Btn>
         </div>
 
         {/* List */}
         {filtered.length === 0 ? (
           <div className="glass-card rounded-[24px] p-10 text-center shadow-card">
             <TrendingDown size={40} className="text-on-surface-variant mx-auto mb-3 opacity-40" />
-            <p className="text-on-surface-variant text-sm">No hay gastos registrados.</p>
+            {expenses.length === 0 ? (
+              <p className="text-on-surface-variant text-sm">No hay gastos registrados.</p>
+            ) : (
+              <p className="text-on-surface-variant text-sm">Sin resultados para este filtro.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

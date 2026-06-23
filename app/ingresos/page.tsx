@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Trash2, TrendingUp, Pencil } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, Pencil, Search } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
 import { incomeSchema, type IncomeInput } from '@/lib/validators';
@@ -28,6 +28,12 @@ function fmt(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
 
+function fmtMonthLabel(ym: string) {
+  const [year, month] = ym.split('-');
+  const names = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  return `${names[parseInt(month) - 1]} ${year}`;
+}
+
 export default function IncomesPage() {
   const { user, isLoading } = useProtected();
   const toast = useToast();
@@ -38,6 +44,10 @@ export default function IncomesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Income | null>(null);
   const [error, setError] = useState('');
+
+  const currentMonth = new Date().toISOString().substring(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [search, setSearch] = useState('');
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,6 +71,35 @@ export default function IncomesPage() {
   }
 
   useEffect(() => { if (user) loadData(); }, [user]);
+
+  // Meses disponibles según los datos cargados
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set(incomes.map((i) => i.date.substring(0, 7)));
+    return Array.from(monthSet).sort().reverse();
+  }, [incomes]);
+
+  // Lista filtrada por mes y búsqueda
+  const filtered = useMemo(() => {
+    return incomes.filter((i) => {
+      const inMonth = selectedMonth === 'all' || i.date.startsWith(selectedMonth);
+      const q = search.toLowerCase();
+      const inSearch = !q
+        || i.name.toLowerCase().includes(q)
+        || i.category.name.toLowerCase().includes(q)
+        || i.account.name.toLowerCase().includes(q);
+      return inMonth && inSearch;
+    });
+  }, [incomes, selectedMonth, search]);
+
+  const filteredTotal = useMemo(
+    () => filtered.reduce((s, i) => s + i.amount, 0),
+    [filtered],
+  );
+
+  const monthlyRecurring = useMemo(
+    () => filtered.filter((i) => i.frequency === 'MONTHLY').reduce((s, i) => s + i.amount, 0),
+    [filtered],
+  );
 
   function openAdd() {
     setEditTarget(null);
@@ -115,20 +154,9 @@ export default function IncomesPage() {
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-  const totalThisMonth = incomes
-    .filter((i) => {
-      const d = new Date(i.date);
-      return d >= startOfMonth && d <= endOfMonth;
-    })
-    .reduce((s, i) => s + i.amount, 0);
-
-  const totalMonthly = incomes
-    .filter((i) => i.frequency === 'MONTHLY')
-    .reduce((s, i) => s + i.amount, 0);
+  const summaryLabel = selectedMonth === 'all'
+    ? 'Todos los registros'
+    : fmtMonthLabel(selectedMonth);
 
   return (
     <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
@@ -144,13 +172,13 @@ export default function IncomesPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant">
-                {now.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })}
+                {summaryLabel}
               </p>
-              <h2 className="mt-2 text-3xl font-bold text-secondary">{fmt(totalThisMonth)}</h2>
+              <h2 className="mt-2 text-3xl font-bold text-secondary">{fmt(filteredTotal)}</h2>
               <p className="mt-1 text-sm text-on-surface-variant">
-                {incomes.length} fuente{incomes.length !== 1 ? 's' : ''} registrada{incomes.length !== 1 ? 's' : ''}
-                {totalMonthly > 0 && totalMonthly !== totalThisMonth && (
-                  <span className="ml-2 text-on-surface-variant/60">· {fmt(totalMonthly)} recurrente</span>
+                {filtered.length} fuente{filtered.length !== 1 ? 's' : ''} registrada{filtered.length !== 1 ? 's' : ''}
+                {monthlyRecurring > 0 && monthlyRecurring !== filteredTotal && (
+                  <span className="ml-2 text-on-surface-variant/60">· {fmt(monthlyRecurring)} recurrente</span>
                 )}
               </p>
             </div>
@@ -168,16 +196,48 @@ export default function IncomesPage() {
           <Plus size={18} /> Agregar Ingreso
         </button>
 
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1 rounded-2xl bg-surface-container px-3 py-2.5">
+            <Search size={14} className="text-on-surface-variant shrink-0" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por nombre o categoría..."
+              className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant outline-none border-none"
+            />
+          </div>
+          {/* Month selector */}
+          <div className="sm:w-44">
+            <SelectField
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              <option value="all">Todos los meses</option>
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>{fmtMonthLabel(m)}</option>
+              ))}
+            </SelectField>
+          </div>
+        </div>
+
         {/* List */}
-        {incomes.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="glass-card rounded-[24px] p-10 text-center shadow-card">
             <TrendingUp size={40} className="text-on-surface-variant mx-auto mb-3 opacity-40" />
-            <p className="text-on-surface-variant text-sm">No tienes ingresos registrados.</p>
-            <p className="text-xs text-on-surface-variant mt-1">Agrega tu primer ingreso para empezar.</p>
+            {incomes.length === 0 ? (
+              <>
+                <p className="text-on-surface-variant text-sm">No tienes ingresos registrados.</p>
+                <p className="text-xs text-on-surface-variant mt-1">Agrega tu primer ingreso para empezar.</p>
+              </>
+            ) : (
+              <p className="text-on-surface-variant text-sm">Sin resultados para este filtro.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
-            {incomes.map((income) => (
+            {filtered.map((income) => (
               <div key={income.id} className="glass-card rounded-[24px] p-5 shadow-card flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-11 h-11 rounded-full bg-secondary/10 flex items-center justify-center">
