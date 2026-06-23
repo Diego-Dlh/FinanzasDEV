@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { loginSchema, type LoginInput } from '@/lib/validators';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, FlaskConical } from 'lucide-react';
 import { useState } from 'react';
 import { Input, Btn } from '@/components/ui/field';
 
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   const {
     register,
@@ -20,6 +21,21 @@ export default function LoginPage() {
     setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({ resolver: zodResolver(loginSchema) });
+
+  async function handleDemoLogin() {
+    setDemoLoading(true);
+    try {
+      const res = await fetch('/api/demo-login');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Error al iniciar sesión demo');
+      login(json.token, json.user);
+      router.replace('/');
+    } catch (err) {
+      setError('root', { message: (err as Error).message });
+    } finally {
+      setDemoLoading(false);
+    }
+  }
 
   async function onSubmit(data: LoginInput) {
     try {
@@ -47,7 +63,7 @@ export default function LoginPage() {
           <p className="text-sm text-on-surface-variant">Accede a tu panel financiero personal.</p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5 rounded-[24px] bg-white p-7 shadow-card border border-outline-variant/10">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5 rounded-[24px] bg-surface-container p-7 shadow-card border border-outline-variant/10">
           {errors.root && (
             <div className="rounded-2xl bg-error-container px-4 py-3 text-sm text-on-error-container">
               {errors.root.message}
@@ -96,6 +112,22 @@ export default function LoginPage() {
               Regístrate
             </Link>
           </p>
+
+          <div className="relative flex items-center gap-3">
+            <div className="flex-1 h-px bg-outline-variant/30" />
+            <span className="text-xs text-on-surface-variant">o</span>
+            <div className="flex-1 h-px bg-outline-variant/30" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleDemoLogin}
+            disabled={demoLoading || isSubmitting}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl border border-outline-variant/30 bg-surface-container-low py-3 text-sm font-medium text-on-surface-variant hover:bg-surface-container transition disabled:opacity-50"
+          >
+            <FlaskConical size={16} />
+            {demoLoading ? 'Cargando...' : 'Acceso demo (sin base de datos)'}
+          </button>
         </form>
       </div>
     </main>
