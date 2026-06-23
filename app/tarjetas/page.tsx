@@ -13,6 +13,7 @@ import { PageSpinner } from '@/components/ui/spinner';
 import { Input, SelectField, Field, Btn } from '@/components/ui/field';
 
 interface Category { id: string; name: string; type: string }
+interface Account { id: string; name: string; type: string; balance: number }
 
 interface CardPurchase {
   id: string;
@@ -65,6 +66,8 @@ export default function TarjetasPage() {
   const { user, isLoading } = useProtected();
   const [cards, setCards] = useState<CreditCardData[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [abonoError, setAbonoError] = useState('');
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState('');
 
@@ -92,12 +95,14 @@ export default function TarjetasPage() {
 
   async function loadData() {
     try {
-      const [cardsRes, catRes] = await Promise.all([
+      const [cardsRes, catRes, accRes] = await Promise.all([
         api.get<{ cards: CreditCardData[] }>('/tarjetas'),
         api.get<{ categories: Category[] }>('/categorias'),
+        api.get<{ accounts: Account[] }>('/cuentas'),
       ]);
       setCards(cardsRes.cards);
       setCategories(catRes.categories.filter((c) => c.type === 'EXPENSE'));
+      setAccounts(accRes.accounts);
       if (selectedCard) {
         const updated = cardsRes.cards.find((c) => c.id === selectedCard.id);
         if (updated) setSelectedCard(updated);
@@ -194,22 +199,39 @@ export default function TarjetasPage() {
 
   function openAbonoModal() {
     const { minPayment } = calcMinPayment(selectedCard!);
+    setAbonoError('');
     abonoForm.reset({
       amount: Math.round(minPayment),
       note: '',
       paidAt: new Date().toISOString().split('T')[0],
+      accountId: '',
     });
     setShowAbonoModal(true);
   }
 
   async function onAbonoSubmit(data: CardPaymentInput) {
     if (!selectedCard) return;
+    setAbonoError('');
+
+    if (data.amount > selectedCard.usedBalance) {
+      setAbonoError(`El abono no puede superar el saldo de la tarjeta (${fmt(selectedCard.usedBalance)})`);
+      return;
+    }
+    const selectedAcc = accounts.find(a => a.id === data.accountId);
+    if (selectedAcc && data.amount > selectedAcc.balance) {
+      setAbonoError(`Saldo insuficiente en la cuenta seleccionada (${fmt(selectedAcc.balance)} disponibles)`);
+      return;
+    }
+
     try {
-      await api.post(`/tarjetas/${selectedCard.id}/abonos`, data);
+      await api.post(`/tarjetas/${selectedCard.id}/abonos`, {
+        ...data,
+        accountId: data.accountId || undefined,
+      });
       setShowAbonoModal(false);
       await loadData();
     } catch (e) {
-      setError((e as Error).message);
+      setAbonoError((e as Error).message);
     }
   }
 
@@ -441,6 +463,11 @@ export default function TarjetasPage() {
           onClose={() => setShowAbonoModal(false)}
         >
           <form onSubmit={abonoForm.handleSubmit(onAbonoSubmit)} className="space-y-4">
+            <div className="rounded-2xl bg-surface-container-low p-4 space-y-1">
+              <p className="text-xs text-on-surface-variant">Saldo de la tarjeta</p>
+              <p className="text-2xl font-bold text-primary">{fmt(selectedCard.usedBalance)}</p>
+            </div>
+
             <Field label="Monto abonado" error={abonoForm.formState.errors.amount?.message} required>
               <Input
                 {...abonoForm.register('amount', { valueAsNumber: true })}
@@ -450,6 +477,19 @@ export default function TarjetasPage() {
               />
             </Field>
 
+            {accounts.length > 0 && (
+              <Field label="Descontar de cuenta (opcional)">
+                <SelectField {...abonoForm.register('accountId')}>
+                  <option value="">— Sin descontar de cuenta —</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} · {fmt(a.balance)}
+                    </option>
+                  ))}
+                </SelectField>
+              </Field>
+            )}
+
             <Field label="Fecha del pago" error={abonoForm.formState.errors.paidAt?.message} required>
               <Input {...abonoForm.register('paidAt')} type="date" />
             </Field>
@@ -458,10 +498,9 @@ export default function TarjetasPage() {
               <Input {...abonoForm.register('note')} placeholder="ej. Pago mínimo junio" />
             </Field>
 
-            <div className="rounded-2xl bg-secondary-container px-4 py-3 text-sm text-on-secondary-container">
-              Saldo actual:{' '}
-              <span className="font-semibold">{fmt(selectedCard.usedBalance)}</span>
-            </div>
+            {abonoError && (
+              <div className="rounded-xl bg-error-container px-3 py-2 text-xs text-on-error-container">{abonoError}</div>
+            )}
 
             <Btn
               type="submit"

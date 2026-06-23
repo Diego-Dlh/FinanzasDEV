@@ -55,8 +55,9 @@ export const goalSchema = z.object({
 });
 
 export const paymentSchema = z.object({
-  debtId: z.string().min(1, 'La deuda es requerida'),
-  amount: z.number().positive('El monto debe ser positivo'),
+  debtId:    z.string().min(1, 'La deuda es requerida'),
+  amount:    z.number().positive('El monto debe ser positivo'),
+  accountId: z.string().optional(),
 });
 
 export const creditCardSchema = z.object({
@@ -86,9 +87,10 @@ export type BudgetInput      = z.infer<typeof budgetSchema>;
 export type GoalInput        = z.infer<typeof goalSchema>;
 export type PaymentInput     = z.infer<typeof paymentSchema>;
 export const cardPaymentSchema = z.object({
-  amount: z.number().positive('El monto debe ser positivo'),
-  note:   z.string().optional(),
-  paidAt: z.string().min(1, 'La fecha es requerida'),
+  amount:    z.number().positive('El monto debe ser positivo'),
+  note:      z.string().optional(),
+  paidAt:    z.string().min(1, 'La fecha es requerida'),
+  accountId: z.string().optional(),
 });
 
 export const changePasswordSchema = z.object({

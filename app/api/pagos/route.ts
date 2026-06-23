@@ -30,16 +30,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
 
-  const { debtId, amount } = parse.data;
+  const { debtId, amount, accountId } = parse.data;
+
   const debt = await prisma.debt.findFirst({ where: { id: debtId, userId } });
   if (!debt) return NextResponse.json({ error: 'Deuda no encontrada' }, { status: 404 });
 
+  if (amount > debt.balance) {
+    return NextResponse.json(
+      { error: `El pago no puede superar el saldo de la deuda (${debt.balance.toLocaleString('es-CO')} COP)` },
+      { status: 400 }
+    );
+  }
+
+  let account = null;
+  if (accountId) {
+    account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+    if (amount > account.balance) {
+      return NextResponse.json(
+        { error: `Saldo insuficiente en la cuenta seleccionada (${account.balance.toLocaleString('es-CO')} COP disponibles)` },
+        { status: 400 }
+      );
+    }
+  }
+
   const newBalance = Math.max(0, debt.balance - amount);
 
-  const [payment] = await prisma.$transaction([
+  const ops: Parameters<typeof prisma.$transaction>[0] = [
     prisma.payment.create({ data: { userId, debtId, amount } }),
     prisma.debt.update({ where: { id: debtId }, data: { balance: newBalance } }),
-  ]);
+  ];
+
+  if (account && accountId) {
+    ops.push(
+      prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })
+    );
+  }
+
+  const [payment] = await prisma.$transaction(ops);
 
   return NextResponse.json({ payment, newBalance }, { status: 201 });
 }

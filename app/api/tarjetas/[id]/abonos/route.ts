@@ -34,9 +34,29 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'El monto debe ser positivo' }, { status: 400 });
   }
 
+  if (amount > card.usedBalance) {
+    return NextResponse.json(
+      { error: `El abono no puede superar el saldo de la tarjeta (${card.usedBalance.toLocaleString('es-CO')} COP)` },
+      { status: 400 }
+    );
+  }
+
+  const accountId = body.accountId as string | undefined;
+  let account = null;
+  if (accountId) {
+    account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+    if (amount > account.balance) {
+      return NextResponse.json(
+        { error: `Saldo insuficiente en la cuenta seleccionada (${account.balance.toLocaleString('es-CO')} COP disponibles)` },
+        { status: 400 }
+      );
+    }
+  }
+
   const newBalance = Math.max(0, card.usedBalance - amount);
 
-  const [payment] = await prisma.$transaction([
+  const ops: Parameters<typeof prisma.$transaction>[0] = [
     prisma.cardPayment.create({
       data: {
         userId,
@@ -50,7 +70,15 @@ export async function POST(request: Request, { params }: Params) {
       where: { id: cardId },
       data: { usedBalance: newBalance },
     }),
-  ]);
+  ];
+
+  if (account && accountId) {
+    ops.push(
+      prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })
+    );
+  }
+
+  const [payment] = await prisma.$transaction(ops);
 
   return NextResponse.json({ payment }, { status: 201 });
 }

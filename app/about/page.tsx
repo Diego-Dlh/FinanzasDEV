@@ -52,7 +52,7 @@ export default function AboutPage() {
           <div>
             <h1 className="text-2xl font-bold text-on-surface">Lumina Finance</h1>
             <p className="text-sm text-secondary font-semibold uppercase tracking-widest mt-0.5">
-              Finanzas personales · Colombia 🇨🇴
+              Finanzas personales · Colombia
             </p>
             <p className="text-sm text-on-surface-variant leading-relaxed mt-3">
               Aplicación de finanzas personales premium en español, diseñada para el mercado colombiano.
@@ -193,7 +193,7 @@ export default function AboutPage() {
         </div>
 
         <p className="text-xs text-on-surface-variant text-center pb-2">
-          Versión 1.3 · 2026 · Hecho con dedicación en Colombia 🇨🇴
+          Versión 1.3 · 2026 · Hecho con dedicación en Colombia por Diego De la Hoz
         </p>
 
       </section>

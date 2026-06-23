@@ -88,12 +88,12 @@ export default function HomePage() {
           >
             <div className="absolute -top-16 -right-16 w-40 h-40 bg-secondary/20 blur-[60px] rounded-full" />
             <div>
-              <p className="text-xs uppercase tracking-[0.25em] text-on-primary-container opacity-80 mb-1">Saldo Disponible</p>
+              <p className="text-xs uppercase tracking-[0.25em] text-white/70 mb-1">Saldo Disponible</p>
               <h2 className="text-4xl font-bold tracking-tight">{fmt(d.totalBalance)}</h2>
             </div>
             <div className="flex items-center justify-between">
               <p className="text-sm opacity-70">{d.accountsCount} cuenta{d.accountsCount !== 1 ? 's' : ''} activa{d.accountsCount !== 1 ? 's' : ''}</p>
-              <span className={`text-xs px-3 py-1 rounded-full font-semibold ${d.monthlyIncome > d.monthlyExpenses ? 'bg-secondary/20 text-secondary-fixed-dim' : 'bg-error/20 text-tertiary-fixed-dim'}`}>
+              <span className={`text-xs px-3 py-1 rounded-full font-semibold ${d.monthlyIncome > d.monthlyExpenses ? 'bg-secondary/30 text-secondary' : 'bg-error/30 text-error'}`}>
                 {d.monthlyIncome > d.monthlyExpenses ? '+' : '-'} flujo {d.monthlyIncome > d.monthlyExpenses ? 'positivo' : 'negativo'}
               </span>
             </div>
