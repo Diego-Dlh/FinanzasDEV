@@ -1,6 +1,6 @@
 # LUMINA FINANCE — CONTEXTO COMPLETO DEL PROYECTO
 
-> Última actualización: 2026-06-23 (sesión 3). Documento de referencia para continuar desarrollo en nuevas sesiones de Claude.
+> Última actualización: 2026-06-23 (sesión 4). Documento de referencia para continuar desarrollo en nuevas sesiones de Claude.
 
 ---
 
@@ -110,6 +110,7 @@ Usar siempre variables CSS del tema: `bg-surface`, `bg-surface-container`, `bg-s
 ### `app/ClientLayout.tsx` (`'use client'`)
 - Si ruta es `/admin/*` o `/auth/*`: renderiza children directo (sin sidebar, sin padding)
 - Resto: `<Sidebar />` + `<div className="lg:pl-60">{children}</div>`
+- **Llama `POST /api/alertas/auto` en silencio** cuando el usuario inicia sesión (`useEffect` sobre `user?.id`). No muestra toast — el badge rojo en la campana notifica al usuario. El error se ignora con `.catch(() => {})`
 
 ---
 
@@ -286,6 +287,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `/api/alertas` | PUT | Body `{ markAllRead: true }` → marca todas como leídas |
 | `/api/alertas/[id]` | PUT | Marca alerta individual como leída |
 | `/api/alertas/[id]` | DELETE | Elimina alerta |
+| `/api/alertas/auto` | POST | Genera alertas automáticas de vencimiento. Busca deudas con `dueDate` en próximos 7 días (balance > 0) y tarjetas con `dueDay` en próximos 7 días (usedBalance > 0). Deduplicación por campo `type` (`vencimiento_deuda_<id>` / `vencimiento_tarjeta_<id>`): no crea si ya existe una del mismo tipo en los últimos 3 días. Retorna `{ ok, created }`. Silencia errores de DB. |
 
 ### Configuración
 | Ruta | Método | Descripción |
@@ -359,8 +361,21 @@ GET de cada ruta retorna array vacío si DB no disponible.
 - Botón ojo (`Eye`/`EyeOff`) por cuenta: toggle optimista de `hideFromTotal`, con rollback si falla la API
 - Cuentas excluidas: atenuadas (opacity-60) con balance tachado
 
+### `/ingresos` — Ingresos
+- CRUD completo de ingresos
+- **Filtros client-side:** barra de búsqueda (nombre, categoría, cuenta) + selector de mes dinámico (generado desde los datos cargados, default mes actual)
+- La tarjeta de resumen refleja el total del período/filtro seleccionado
+- Empty state diferenciado: "No tienes ingresos" vs "Sin resultados para este filtro"
+
+### `/gastos` — Gastos
+- CRUD completo de gastos
+- **Filtros client-side (triple):** búsqueda por texto (descripción, categoría, cuenta) + selector de mes + filtro de categoría — los tres se combinan con AND
+- La tarjeta de resumen muestra total filtrado e indica "(filtrado)" si hay filtros activos
+- Empty state diferenciado: "No hay gastos" vs "Sin resultados para este filtro"
+
 ### `/historial` — Historial
 - Filtros período/tipo/categoría, bar chart mensual, donut por categoría, lista con búsqueda
+- **Botón "Exportar CSV"** junto al buscador: descarga las transacciones tal como están filtradas en ese momento. Columnas: Fecha, Tipo, Descripción, Categoría, Cuenta, Monto COP. Incluye BOM UTF-8 (Excel abre tildes correctamente). Nombre de archivo: `lumina-historial-<período>-<fecha>.csv`. Deshabilitado si no hay resultados.
 
 ### `/deudas` — Deudas
 - **Total deuda = deudas directas + saldo usado de tarjetas de crédito** (desglose en dos sub-cards)
@@ -430,21 +445,21 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 /
 ├── app/
 │   ├── layout.tsx               # Anti-FOUC script en body, ClientLayout wrapper
-│   ├── ClientLayout.tsx         # 'use client' — Sidebar + lg:pl-60 (excepto /admin, /auth)
+│   ├── ClientLayout.tsx         # 'use client' — Sidebar + lg:pl-60 (excepto /admin, /auth) + llama /api/alertas/auto al login
 │   ├── providers.tsx            # AuthProvider + ThemeProvider
 │   ├── globals.css              # Tailwind v4, @theme, dark mode vars, .glass-card
 │   ├── page.tsx                 # Dashboard — Wealth card clickeable → /cuentas
 │   ├── cuentas/page.tsx         # Desglose de cuentas con toggle hideFromTotal (ojo)
 │   ├── about/page.tsx           # Acerca de — sin emojis, footer actualizado, GitBranch icon
-│   ├── historial/page.tsx       # Historial con filtros + charts + lista
+│   ├── historial/page.tsx       # Historial con filtros + charts + lista + botón Exportar CSV
 │   ├── tarjetas/page.tsx        # CreditCards + abonos (con selector de cuenta)
 │   ├── deudas/page.tsx          # Deudas + tarjetas en total + calculadora + selector cuenta
 │   ├── admin/page.tsx           # Panel admin (tema-aware, standalone, con categorías y cuentas)
 │   ├── auth/
 │   │   ├── login/page.tsx       # noValidate, bg-surface-container, botón demo
 │   │   └── register/page.tsx    # Campo registrationKey
-│   ├── ingresos/page.tsx
-│   ├── gastos/page.tsx
+│   ├── ingresos/page.tsx        # CRUD + filtros: búsqueda texto + selector mes (client-side)
+│   ├── gastos/page.tsx          # CRUD + filtros: búsqueda texto + mes + categoría (client-side)
 │   ├── presupuestos/page.tsx
 │   ├── ia/page.tsx
 │   ├── calculadoras/page.tsx
@@ -464,6 +479,7 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │       ├── cuentas/route.ts             # GET con try/catch → []
 │       ├── cuentas/[id]/route.ts        # PUT: actualiza hideFromTotal (valida userId con findFirst)
 │       ├── alertas/route.ts + [id]/     # GET con try/catch → {alerts:[], unreadCount:0}
+│       ├── alertas/auto/route.ts        # POST — genera alertas de vencimiento (deudas + tarjetas, 7 días)
 │       ├── configuracion/route.ts       # GET con try/catch → default setting
 │       ├── historial/route.ts           # try/catch → vacío
 │       ├── health/route.ts
@@ -558,7 +574,7 @@ docker exec lumina_app npx prisma migrate status
 
 ---
 
-## 13. Estado actual del proyecto (2026-06-23 sesión 3)
+## 13. Estado actual del proyecto (2026-06-23 sesión 4)
 
 ### Funcional
 - CRUD: ingresos, gastos, deudas, presupuestos, metas
@@ -580,6 +596,10 @@ docker exec lumina_app npx prisma migrate status
 - **Toast global** (`useToast()`): feedback de éxito/error en todas las páginas CRUD
 - **Ingresos**: resumen muestra total real del mes actual (no solo `MONTHLY`)
 - **Presupuestos**: barra de progreso usa gasto real del mes por categoría (matching por nombre, case-insensitive)
+- **Filtros avanzados en /ingresos**: búsqueda por texto (nombre/categoría/cuenta) + selector de mes dinámico; summary card refleja el período seleccionado
+- **Filtros avanzados en /gastos**: búsqueda por texto + selector de mes + filtro de categoría (los tres combinables); summary refleja total filtrado
+- **Exportar CSV desde /historial**: botón junto al buscador descarga las transacciones filtradas actuales con BOM UTF-8; nombre incluye período y fecha
+- **Alertas automáticas de vencimiento**: `POST /api/alertas/auto` detecta deudas y tarjetas que vencen en 7 días y crea alertas deduplicadas; se llama silenciosamente desde `ClientLayout.tsx` al iniciar sesión
 
 ### Bugs pendientes
 1. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
