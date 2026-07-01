@@ -56,15 +56,37 @@ export async function POST(request: Request) {
 
   const newBalance = Math.max(0, debt.balance - amount);
 
-  const ops = [
-    prisma.payment.create({ data: { userId, debtId, amount } }),
-    prisma.debt.update({ where: { id: debtId }, data: { balance: newBalance } }),
-    ...(account && accountId
-      ? [prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })]
-      : []),
-  ] as const;
+  const payment = await prisma.$transaction(async (tx) => {
+    let expenseId: string | null = null;
 
-  const [payment] = await prisma.$transaction([...ops]);
+    if (account && accountId) {
+      const cat = await tx.category.upsert({
+        where: { name: 'Pago de Deuda' },
+        create: { name: 'Pago de Deuda', type: 'EXPENSE' },
+        update: {},
+      });
+      const expense = await tx.expense.create({
+        data: {
+          userId,
+          accountId,
+          categoryId: cat.id,
+          description: `Pago: ${debt.name} (${debt.entity})`,
+          amount,
+          date: new Date(),
+          frequency: 'ONE_TIME',
+        },
+      });
+      expenseId = expense.id;
+      await tx.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
+    }
+
+    const payment = await tx.payment.create({
+      data: { userId, debtId, amount, accountId: accountId ?? null, expenseId },
+    });
+    await tx.debt.update({ where: { id: debtId }, data: { balance: newBalance } });
+
+    return payment;
+  });
 
   return NextResponse.json({ payment, newBalance }, { status: 201 });
 }

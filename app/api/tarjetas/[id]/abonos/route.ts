@@ -57,27 +57,48 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const newBalance = Math.max(0, card.usedBalance - amount);
+  const paymentDate = paidAt ? new Date(paidAt) : new Date();
 
-  const ops = [
-    prisma.cardPayment.create({
+  const payment = await prisma.$transaction(async (tx) => {
+    let expenseId: string | null = null;
+
+    if (account && accountId) {
+      const cat = await tx.category.upsert({
+        where: { name: 'Abono Tarjeta' },
+        create: { name: 'Abono Tarjeta', type: 'EXPENSE' },
+        update: {},
+      });
+      const expense = await tx.expense.create({
+        data: {
+          userId,
+          accountId,
+          categoryId: cat.id,
+          description: `Abono: ${card.name} (${card.bank})`,
+          amount,
+          date: paymentDate,
+          frequency: 'ONE_TIME',
+        },
+      });
+      expenseId = expense.id;
+      await tx.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
+    }
+
+    const payment = await tx.cardPayment.create({
       data: {
         userId,
         cardId,
         amount,
         note: note ?? null,
-        paidAt: paidAt ? new Date(paidAt) : new Date(),
+        paidAt: paymentDate,
+        accountId: accountId ?? null,
+        expenseId,
       },
-    }),
-    prisma.creditCard.update({
-      where: { id: cardId },
-      data: { usedBalance: newBalance },
-    }),
-    ...(account && accountId
-      ? [prisma.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } })]
-      : []),
-  ] as const;
+    });
 
-  const [payment] = await prisma.$transaction([...ops]);
+    await tx.creditCard.update({ where: { id: cardId }, data: { usedBalance: newBalance } });
+
+    return payment;
+  });
 
   return NextResponse.json({ payment }, { status: 201 });
 }
