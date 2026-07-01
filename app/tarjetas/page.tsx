@@ -357,7 +357,8 @@ export default function TarjetasPage() {
               <Input
                 {...cardForm.register('creditLimit', { valueAsNumber: true })}
                 type="number"
-                step="1000"
+                step="any"
+                min={0}
                 placeholder="0"
               />
             </Field>
@@ -431,7 +432,8 @@ export default function TarjetasPage() {
               <Input
                 {...purchaseForm.register('totalAmount', { valueAsNumber: true })}
                 type="number"
-                step="1000"
+                step="any"
+                min={0}
                 placeholder="0"
               />
             </Field>
@@ -486,7 +488,8 @@ export default function TarjetasPage() {
               <Input
                 {...abonoForm.register('amount', { valueAsNumber: true })}
                 type="number"
-                step="1000"
+                step="any"
+                min={0}
                 placeholder="0"
               />
             </Field>
