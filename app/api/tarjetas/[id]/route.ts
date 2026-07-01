@@ -59,11 +59,23 @@ export async function DELETE(request: Request, { params }: Params) {
   const existing = await prisma.creditCard.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  await prisma.$transaction([
-    prisma.cardPayment.deleteMany({ where: { cardId: id } }),
-    prisma.cardPurchase.deleteMany({ where: { cardId: id } }),
-    prisma.creditCard.delete({ where: { id } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    const abonos = await tx.cardPayment.findMany({ where: { cardId: id } });
+
+    for (const abono of abonos) {
+      if (abono.accountId) {
+        await tx.account.update({ where: { id: abono.accountId }, data: { balance: { increment: abono.amount } } });
+      }
+      if (abono.expenseId) {
+        const expense = await tx.expense.findUnique({ where: { id: abono.expenseId } });
+        if (expense) await tx.expense.delete({ where: { id: abono.expenseId } });
+      }
+      await tx.cardPayment.delete({ where: { id: abono.id } });
+    }
+
+    await tx.cardPurchase.deleteMany({ where: { cardId: id } });
+    await tx.creditCard.delete({ where: { id } });
+  });
 
   return NextResponse.json({ ok: true });
 }

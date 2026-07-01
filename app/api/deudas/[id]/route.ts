@@ -43,10 +43,22 @@ export async function DELETE(request: Request, { params }: Params) {
   const existing = await prisma.debt.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  await prisma.$transaction([
-    prisma.payment.deleteMany({ where: { debtId: id } }),
-    prisma.debt.delete({ where: { id } }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    const payments = await tx.payment.findMany({ where: { debtId: id } });
+
+    for (const payment of payments) {
+      if (payment.accountId) {
+        await tx.account.update({ where: { id: payment.accountId }, data: { balance: { increment: payment.amount } } });
+      }
+      if (payment.expenseId) {
+        const expense = await tx.expense.findUnique({ where: { id: payment.expenseId } });
+        if (expense) await tx.expense.delete({ where: { id: payment.expenseId } });
+      }
+      await tx.payment.delete({ where: { id: payment.id } });
+    }
+
+    await tx.debt.delete({ where: { id } });
+  });
 
   return NextResponse.json({ ok: true });
 }

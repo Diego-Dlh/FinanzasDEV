@@ -70,13 +70,30 @@ export async function DELETE(request: Request, { params }: Params) {
   const existing = await prisma.expense.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  await prisma.$transaction([
-    prisma.expense.delete({ where: { id } }),
-    prisma.account.update({
-      where: { id: existing.accountId },
-      data: { balance: { increment: existing.amount } },
-    }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    // Si el expense fue creado por un pago de deuda, también restaurar la deuda
+    const linkedPayment = await tx.payment.findFirst({ where: { expenseId: id } });
+    if (linkedPayment) {
+      await tx.debt.update({ where: { id: linkedPayment.debtId }, data: { balance: { increment: linkedPayment.amount } } });
+      await tx.payment.delete({ where: { id: linkedPayment.id } });
+    }
+
+    // Si el expense fue creado por un abono de tarjeta, también restaurar el saldo de la tarjeta
+    const linkedCardPayment = await tx.cardPayment.findFirst({ where: { expenseId: id } });
+    if (linkedCardPayment) {
+      const card = await tx.creditCard.findUnique({ where: { id: linkedCardPayment.cardId } });
+      if (card) {
+        await tx.creditCard.update({
+          where: { id: linkedCardPayment.cardId },
+          data: { usedBalance: Math.min(card.creditLimit, card.usedBalance + linkedCardPayment.amount) },
+        });
+      }
+      await tx.cardPayment.delete({ where: { id: linkedCardPayment.id } });
+    }
+
+    await tx.expense.delete({ where: { id } });
+    await tx.account.update({ where: { id: existing.accountId }, data: { balance: { increment: existing.amount } } });
+  });
 
   return NextResponse.json({ ok: true });
 }
