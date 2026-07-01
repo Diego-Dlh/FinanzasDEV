@@ -56,6 +56,9 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const cerrar = searchParams.get('modo') === 'cerrar';
+
   const existing = await prisma.creditCard.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
@@ -63,12 +66,15 @@ export async function DELETE(request: Request, { params }: Params) {
     const abonos = await tx.cardPayment.findMany({ where: { cardId: id } });
 
     for (const abono of abonos) {
-      if (abono.accountId) {
-        await tx.account.update({ where: { id: abono.accountId }, data: { balance: { increment: abono.amount } } });
-      }
-      if (abono.expenseId) {
-        const expense = await tx.expense.findUnique({ where: { id: abono.expenseId } });
-        if (expense) await tx.expense.delete({ where: { id: abono.expenseId } });
+      if (!cerrar) {
+        // Eliminar: revertir todo
+        if (abono.accountId) {
+          await tx.account.update({ where: { id: abono.accountId }, data: { balance: { increment: abono.amount } } });
+        }
+        if (abono.expenseId) {
+          const expense = await tx.expense.findUnique({ where: { id: abono.expenseId } });
+          if (expense) await tx.expense.delete({ where: { id: abono.expenseId } });
+        }
       }
       await tx.cardPayment.delete({ where: { id: abono.id } });
     }

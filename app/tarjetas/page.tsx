@@ -79,6 +79,7 @@ export default function TarjetasPage() {
   const [selectedCard, setSelectedCard] = useState<CreditCardData | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showAbonoModal, setShowAbonoModal] = useState(false);
+  const [deleteCardTarget, setDeleteCardTarget] = useState<CreditCardData | null>(null);
 
   const [purchasePreview, setPurchasePreview] = useState<number | null>(null);
 
@@ -156,13 +157,21 @@ export default function TarjetasPage() {
     }
   }
 
-  async function handleDeleteCard(id: string) {
-    if (!confirm('¿Eliminar esta tarjeta y todas sus compras y abonos?')) return;
+  function handleDeleteCard(id: string) {
+    const card = cards.find((c) => c.id === id) ?? selectedCard;
+    if (card) setDeleteCardTarget(card);
+  }
+
+  async function confirmCardAction(modo: 'cerrar' | 'eliminar') {
+    if (!deleteCardTarget) return;
+    const id = deleteCardTarget.id;
+    setDeleteCardTarget(null);
     setError('');
     try {
-      await api.delete(`/tarjetas/${id}`);
+      const qs = modo === 'cerrar' ? '?modo=cerrar' : '';
+      await api.delete(`/tarjetas/${id}${qs}`);
       if (selectedCard?.id === id) setSelectedCard(null);
-      toast.success('Tarjeta eliminada');
+      toast.success(modo === 'cerrar' ? 'Tarjeta cancelada' : 'Tarjeta eliminada');
       await loadData();
     } catch (e) {
       toast.error((e as Error).message);
@@ -402,6 +411,42 @@ export default function TarjetasPage() {
               {editCard ? 'Guardar cambios' : 'Agregar tarjeta'}
             </Btn>
           </form>
+        </Modal>
+      )}
+
+      {/* ── Delete card confirmation modal ─────────────────────────────────── */}
+      {deleteCardTarget && (
+        <Modal
+          title="¿Qué deseas hacer?"
+          subtitle={`Tarjeta: ${deleteCardTarget.name} · ${deleteCardTarget.bank}`}
+          onClose={() => setDeleteCardTarget(null)}
+        >
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-surface-container-low p-4 space-y-3">
+              <div>
+                <p className="font-semibold text-sm text-on-surface">Cancelar tarjeta</p>
+                <p className="text-xs text-on-surface-variant mt-1">
+                  Cierra la tarjeta porque la cancelaste o la saldaste. Los abonos y pagos
+                  realizados permanecen en tu historial — no se revierten los movimientos de tus cuentas.
+                </p>
+              </div>
+              <Btn variant="secondary" className="w-full" onClick={() => confirmCardAction('cerrar')}>
+                Cancelar tarjeta
+              </Btn>
+            </div>
+            <div className="rounded-2xl bg-error-container/40 p-4 space-y-3">
+              <div>
+                <p className="font-semibold text-sm text-error">Eliminar registro</p>
+                <p className="text-xs text-on-surface-variant mt-1">
+                  Borra la tarjeta como si nunca hubiera existido. Todos los movimientos
+                  asociados se revierten y el dinero vuelve a tus cuentas.
+                </p>
+              </div>
+              <Btn variant="danger" className="w-full" onClick={() => confirmCardAction('eliminar')}>
+                Eliminar y revertir todo
+              </Btn>
+            </div>
+          </div>
         </Modal>
       )}
 

@@ -36,6 +36,7 @@ export default function DebtsPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Debt | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<Debt | null>(null);
+  const [deleteDebtTarget, setDeleteDebtTarget] = useState<Debt | null>(null);
   const [payError, setPayError] = useState('');
   const [error, setError] = useState('');
 
@@ -111,13 +112,21 @@ export default function DebtsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('¿Eliminar esta deuda y todos sus pagos?')) return;
+  function handleDelete(id: string) {
+    const debt = debts.find((d) => d.id === id);
+    if (debt) setDeleteDebtTarget(debt);
+  }
+
+  async function confirmDebtAction(modo: 'cerrar' | 'eliminar') {
+    if (!deleteDebtTarget) return;
+    const id = deleteDebtTarget.id;
+    setDeleteDebtTarget(null);
     setError('');
     try {
-      await api.delete(`/deudas/${id}`);
+      const qs = modo === 'cerrar' ? '?modo=cerrar' : '';
+      await api.delete(`/deudas/${id}${qs}`);
       setDebts((prev) => prev.filter((d) => d.id !== id));
-      toast.success('Deuda eliminada');
+      toast.success(modo === 'cerrar' ? 'Deuda cerrada' : 'Deuda eliminada');
     } catch (e) {
       toast.error((e as Error).message);
       setError((e as Error).message);
@@ -375,6 +384,42 @@ export default function DebtsPage() {
           </div>
         )}
       </section>
+
+      {/* Delete debt confirmation modal */}
+      {deleteDebtTarget && (
+        <Modal
+          title="¿Qué deseas hacer?"
+          subtitle={`Deuda: ${deleteDebtTarget.name} · ${deleteDebtTarget.entity}`}
+          onClose={() => setDeleteDebtTarget(null)}
+        >
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-surface-container-low p-4 space-y-3">
+              <div>
+                <p className="font-semibold text-sm text-on-surface">Cerrar deuda</p>
+                <p className="text-xs text-on-surface-variant mt-1">
+                  Marca la deuda como saldada o cancelada. Los pagos realizados
+                  permanecen en tu historial — no se revierten los movimientos de tus cuentas.
+                </p>
+              </div>
+              <Btn variant="secondary" className="w-full" onClick={() => confirmDebtAction('cerrar')}>
+                Cerrar deuda
+              </Btn>
+            </div>
+            <div className="rounded-2xl bg-error-container/40 p-4 space-y-3">
+              <div>
+                <p className="font-semibold text-sm text-error">Eliminar registro</p>
+                <p className="text-xs text-on-surface-variant mt-1">
+                  Borra la deuda como si nunca hubiera existido. Todos los pagos
+                  se revierten y el dinero vuelve a tus cuentas.
+                </p>
+              </div>
+              <Btn variant="danger" className="w-full" onClick={() => confirmDebtAction('eliminar')}>
+                Eliminar y revertir todo
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Debt Modal */}
       {showDebtModal && (
