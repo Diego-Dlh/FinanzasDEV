@@ -95,6 +95,12 @@ export default function IAPage() {
         text: `¡Hola, ${user.name.split(' ')[0]}! Soy tu asesor financiero IA. Analicé tus datos: saldo disponible ${fmt(d.totalBalance)}, salud financiera ${d.healthScore}/100. ¿En qué puedo ayudarte hoy?`,
         time: getTime(),
       }]);
+    }).catch(() => {
+      setMessages([{
+        type: 'assistant',
+        text: 'No pude cargar tus datos financieros en este momento. Intenta de nuevo en unos minutos.',
+        time: getTime(),
+      }]);
     });
   }, [user]);
 

@@ -7,6 +7,13 @@
   --color-primary-container: #d6e3ff;
   --color-on-primary-container: #0d1c32;
 
+  /* Warning (amber) — budgets close to the limit */
+  --color-warning: #b45309;
+
+  /* Chart palette (categories) */
+  --chart-1: #2563eb; --chart-2: #16a34a; --chart-3: #dc2626; --chart-4: #ca8a04; --chart-5: #7c3aed;
+  --chart-6: #0891b2; --chart-7: #be185d; --chart-8: #ea580c; --chart-9: #065f46; --chart-10: #92400e;
+
   /* Secondary (Green) */
   --color-secondary: #006e2a;
   --color-on-secondary: #ffffff;
@@ -135,6 +142,9 @@ select {
 
 /* ── Dark mode ─────────────────────────────────────────────────────────────── */
 html.dark {
+  --color-warning:                    #fbbf24;
+  --chart-1: #60a5fa; --chart-2: #4ade80; --chart-3: #f87171; --chart-4: #facc15; --chart-5: #a78bfa;
+  --chart-6: #22d3ee; --chart-7: #f472b6; --chart-8: #fb923c; --chart-9: #34d399; --chart-10: #d6a27a;
   --color-surface:                    #111318;
   --color-surface-dim:                #111318;
   --color-surface-bright:             #37393e;

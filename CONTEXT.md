@@ -9,8 +9,8 @@
 - **Nombre:** Lumina Finance
 - **Descripción:** App de finanzas personales premium en español, orientada al mercado colombiano (moneda COP)
 - **Repo GitHub:** https://github.com/Diego-Dlh/FinanzasDEV
-- **VPS producción:** 31.97.138.41 (Hostinger, Ubuntu 24.04)
-- **Ruta en VPS:** `/opt/lumina`
+- **Producción:** homelab propio con Cloudflare Tunnel (ver `docs/HOMELAB.md`)
+- **VPS anterior (legado):** Hostinger, Ubuntu 24.04, ruta `/opt/lumina`
 - **Backup/staging Render:** https://finanzasdev.onrender.com
 - **package.json name:** `finanzasdev`
 
@@ -79,8 +79,11 @@ Usar siempre variables CSS del tema: `bg-surface`, `bg-surface-container`, `bg-s
 
 - Token JWT en `localStorage.auth_token` (expira 7d)
 - Usuario en `localStorage.auth_user` (JSON) — incluye `isAdmin?: boolean`
-- `lib/auth.ts`: `hashPassword`, `verifyPassword`, `createToken`, `verifyToken`, `authenticateToken`
-- `lib/adminAuth.ts`: `requireAdmin(authHeader)` — verifica userId + `isAdmin: true` en DB; `generateKey()` — genera código 6 chars alfanumérico sin ambiguos (sin 0/O, 1/I)
+- `lib/auth.ts`: `hashPassword`, `verifyPassword`, `createToken`, `verifyToken`, `authenticateToken` (**async**: además de la firma comprueba en la BD que el usuario exista y que `tokenVersion` coincida con el claim `tv` del token; si la BD no responde lanza 503). El usuario demo (`DEMO_USER_ID`) no tiene fila en la BD y se salta esa comprobación.
+- **Sesiones:** cambiar la contraseña (`PUT /api/auth/cambiar-password`) incrementa `User.tokenVersion` y devuelve un token nuevo para el dispositivo actual; las demás sesiones reciben 401 y la interfaz las lleva al login.
+- **API:** todas las rutas exportan `export const GET = api(handleGet)` (`lib/http.ts`): cualquier error se convierte en JSON (`HttpError` → su estado, JSON inválido → 400, P2002 → 409, P2025 → 404, BD caída → 503, resto → 500). Usar `parseBody(request, schema)` para validar. Nunca devolver errores como objeto: siempre `{ error: string }`.
+- **Saldos de ingresos/gastos:** editar y eliminar bloquean la fila (`lib/rowLocks.ts`, `FOR UPDATE`) y la releen dentro de la transacción antes de calcular la diferencia.
+- `lib/adminAuth.ts`: `requireAdmin(authHeader)` — verifica userId + `isAdmin: true` en DB; `generateKey()` — código de 6 caracteres sin ambiguos (sin 0/O, 1/I) con `crypto.randomInt`; `hasValidSetupKey(req)` — compara en tiempo constante el header `x-setup-key` con `SEED_KEY`
 - `lib/hooks/useAuth.tsx`: `AuthProvider`, `useAuth()`, `useProtected()`
   - `AuthUser = { id, name, email, isAdmin?: boolean }`
 - `lib/hooks/useTheme.tsx`: `ThemeProvider`, `useTheme()` — lee localStorage + sincroniza con DB
@@ -193,7 +196,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 
 **`Payment`** — FK: userId, debtId · campos: amount, paidAt
 
-**`Budget`** — campos: name, allocated, spent (default 0)
+**`Budget`** — campos: name, allocated, `categoryId` (categoría de gasto que sigue; una por presupuesto). `spent` es una columna heredada que ya no se lee ni se escribe: el gasto se calcula en `GET /api/presupuestos`
 
 **`Goal`** — campos: title, description, targetAmount, currentAmount (default 0), targetDate
 
@@ -223,7 +226,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | totalAmount | Float |
 | installments | Int @default(1) |
 | installmentAmt | Float |
-| paidInstallments | Int @default(0) |
+| paidInstallments | Int @default(0) — **sin uso**: las cuotas vigentes se calculan por fecha en `lib/cards.ts` (una cuota por mes calendario desde el mes de la compra) |
 | date | DateTime |
 | FK | userId, cardId, categoryId |
 
@@ -263,12 +266,12 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 | `/api/auth/register` | POST | No | Valida `registrationKey` contra clave activa en DB. Crea user + 3 cuentas + Setting + Alert bienvenida |
 | `/api/auth/login` | POST | No | Retorna `{ token, user: { id, name, email, isAdmin } }` |
 | `/api/auth/cambiar-password` | PUT | Sí | Verifica `currentPassword`, hashea `newPassword`, actualiza |
-| `/api/demo-login` | GET | No | **Solo desarrollo** (bloqueado en NODE_ENV=production). Genera JWT para usuario demo sin DB. Retorna `{ token, user: { id: 'demo-user-id', name: 'Diego Demo', email: 'demo@luminafi.com', isAdmin: true } }` |
+| `/api/demo-login` | GET | No | **Solo desarrollo** (bloqueado en NODE_ENV=production). Genera JWT para usuario demo sin DB. Retorna `{ token, user: { id: 'demo-user-id', name: 'Diego Demo', email: 'demo@luminafi.com', isAdmin: false } }` |
 
 ### Dashboard
 | Ruta | Descripción |
 |------|-------------|
-| `GET /api/dashboard` | totalBalance (solo cuentas con `hideFromTotal: false`), monthlyIncome, monthlyExpenses, totalDebt (deudas + tarjetas), netWorth, healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Si DB falla → retorna MOCK_DASHBOARD con datos de ejemplo en COP** |
+| `GET /api/dashboard` | totalBalance ("Saldo disponible": solo cuentas con `hideFromTotal: false`), monthlyIncome, monthlyExpenses, totalDebt (deudas + tarjetas), netWorth (**todas** las cuentas − deudas), healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Gasto = gastos + compras con tarjeta; los abonos a tarjeta no suman** (`lib/finance.ts`). healthScore usa el promedio de los últimos 3 meses completos con datos (o el mes actual si no hay historial). Si la BD falla → 503 (los datos de ejemplo solo se sirven al usuario demo) |
 
 ### Ingresos / Gastos / Deudas / Presupuestos / Metas / Categorías
 GET de cada ruta retorna array vacío si DB no disponible.
@@ -287,7 +290,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `/api/alertas` | PUT | Body `{ markAllRead: true }` → marca todas como leídas |
 | `/api/alertas/[id]` | PUT | Marca alerta individual como leída |
 | `/api/alertas/[id]` | DELETE | Elimina alerta |
-| `/api/alertas/auto` | POST | Genera alertas automáticas de vencimiento. Busca deudas con `dueDate` en próximos 7 días (balance > 0) y tarjetas con `dueDay` en próximos 7 días (usedBalance > 0). Deduplicación por campo `type` (`vencimiento_deuda_<id>` / `vencimiento_tarjeta_<id>`): no crea si ya existe una del mismo tipo en los últimos 3 días. Retorna `{ ok, created }`. Silencia errores de DB. |
+| `/api/alertas/auto` | POST | Genera alertas automáticas de vencimiento. Busca deudas con `dueDate` en próximos 7 días (balance > 0) y tarjetas con `dueDay` en próximos 7 días (usedBalance > 0). También alerta las deudas **vencidas** con saldo. Una sola alerta por vencimiento: el `type` lleva el id y la fecha (`vencimiento_deuda_<id>_<fecha>`, `vencida_deuda_<id>_<fecha>`, `vencimiento_tarjeta_<id>_<fecha>`). No crea nada si el usuario apagó `Setting.notifications` (interruptor en Configuración). Retorna `{ ok, created }`. |
 
 ### Configuración
 | Ruta | Método | Descripción |
@@ -323,13 +326,17 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `POST /api/admin/clave` | POST | Genera nueva clave (desactiva anteriores) |
 | `GET /api/admin/categorias` | GET | Lista todas las categorías globales con `_count {incomes, expenses, cardPurchases}` |
 | `POST /api/admin/categorias` | POST | Crea categoría global. Body: `{ name, type: 'INCOME'|'EXPENSE' }` |
-| `PUT /api/admin/categorias/[id]` | PUT | Renombra categoría. Body: `{ name }` |
-| `DELETE /api/admin/categorias/[id]` | DELETE | Elimina si no está en uso (verifica _count). Error 409 si hay registros |
+| `PUT /api/admin/categorias/[id]` | PUT | Renombra categoría. Body: `{ name }`. 409 si es de sistema o el nombre está reservado |
+| `DELETE /api/admin/categorias/[id]` | DELETE | Elimina si no está en uso (verifica _count). Error 409 si hay registros o si es de sistema |
+
+**Categorías de sistema** (`Category.isSystem`, definidas en `lib/categories.ts`): "Pago de Deuda" y "Abono Tarjeta". Las crea la app al registrar pagos/abonos; `GET /api/categorias` las oculta (usar `?all=1` para filtros del historial) y los ingresos/gastos/compras no pueden usarlas.
+
+**Saldos y concurrencia:** pagos, abonos y compras descuentan con `updateMany` condicionado (`saldo >= monto`) dentro de la transacción; las eliminaciones borran primero el registro y solo revierten si `count === 1`. Los gastos generados por un pago/abono (`linked`) no se pueden editar; eliminarlos revierte el pago.
 | `GET /api/admin/cuentas?userId=` | GET | Lista cuentas de un usuario con `_count {incomes, expenses}` |
 | `POST /api/admin/cuentas` | POST | Crea cuenta para un usuario. Body: `{ userId, name, type, balance, currency }` |
 | `PUT /api/admin/cuentas/[id]` | PUT | Edita cuenta. Body: `{ name, type, balance, currency }` |
 | `DELETE /api/admin/cuentas/[id]` | DELETE | Elimina si no tiene transacciones. Error 409 si hay registros |
-| `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY`. Idempotente. Crea/actualiza admin@luminafi.com con isAdmin:true |
+| `GET /api/admin/setup` | GET | Header `x-setup-key: <SEED_KEY>` (no se acepta en la URL); `?resetPassword=1` opcional. Idempotente. Crea el admin desde `ADMIN_EMAIL`/`ADMIN_PASSWORD` (o promueve ese usuario). No cambia la contraseña existente salvo `resetPassword=1` |
 
 ### Pagos de deudas
 | Ruta | Método | Descripción |
@@ -341,8 +348,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | Ruta | Descripción |
 |------|-------------|
 | `GET /api/health` | Prueba DB con SELECT 1 |
-| `GET /api/seed?key=SEED_KEY` | Seed inicial (idempotente) |
-| `GET /api/seed/categorias?key=SEED_KEY` | Upsert idempotente de categorías |
+| `GET /api/seed/categorias` (header `x-setup-key`) | Upsert idempotente de categorías |
 
 ---
 
@@ -414,7 +420,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
   3. **Categorías:** tabs Ingresos/Egresos, lista con edición inline (lápiz → input → Enter/✓), botón eliminar (deshabilitado si en uso), campo agregar al final
   4. **Cuentas de usuario:** select de usuario → lista cuentas con tipo/saldo/conteo txn, edición inline expandible, botón eliminar (deshabilitado si tiene txn), formulario agregar cuenta
   5. Usuarios registrados: tabla con nombre/email/actividad/fecha, botón eliminar (cascade completo)
-- Admin: `admin@luminafi.com` / `Dlh2026`
+- Admin: definido por `ADMIN_EMAIL` / `ADMIN_PASSWORD` en el `.env` (nunca documentar credenciales aquí)
 
 ---
 
@@ -483,7 +489,7 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │       ├── configuracion/route.ts       # GET con try/catch → default setting
 │       ├── historial/route.ts           # try/catch → vacío
 │       ├── health/route.ts
-│       ├── seed/route.ts + categorias/
+│       ├── seed/categorias/
 │       ├── tarjetas/route.ts            # GET con try/catch → []
 │       ├── tarjetas/[id]/route.ts
 │       ├── tarjetas/[id]/compras/route.ts
@@ -536,10 +542,10 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 |----------|-------------|---------|
 | `DATABASE_URL` | URL Prisma | `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | Secreto JWT (min 32 chars) | `openssl rand -base64 64` |
-| `SEED_KEY` | Clave para endpoints /api/seed y /api/admin/setup | String aleatorio |
-| `ADMIN_EMAIL` | Email del admin (opcional, default: admin@luminafi.com) | |
-| `ADMIN_PASSWORD` | Password del admin (opcional, default: Dlh2026) | |
-| `ADMIN_NAME` | Nombre del admin (opcional, default: Admin Lumina) | |
+| `SEED_KEY` | Clave para /api/seed/categorias y /api/admin/setup | String aleatorio |
+| `ADMIN_EMAIL` | Email del admin (**obligatorio** para /api/admin/setup) | |
+| `ADMIN_PASSWORD` | Password del admin (**obligatorio**, mín. 10 caracteres, sin default) | |
+| `ADMIN_NAME` | Nombre del admin (opcional, default: Administrador) | |
 | `NODE_ENV` | `production` en VPS | |
 
 ---
@@ -553,14 +559,12 @@ npm run dev
 # Limpiar caché y reiniciar (si hay errores de hydration)
 rm -rf .next && npm run dev
 
-# Deploy en VPS (autodeploy en cada push a main)
-# El entrypoint.sh corre: npx prisma migrate deploy && npm start
+# Homelab: primer arranque (valida .env, levanta stack, crea admin y categorías)
+./scripts/homelab-init.sh
+# Actualizar: ./scripts/deploy.sh  (el entrypoint corre prisma migrate deploy)
 
-# Primera vez o cuando cambia el schema:
-curl "https://luminafi.com/api/admin/setup?key=TU_SEED_KEY"
-
-# Seed de categorías (idempotente, safe en producción):
-curl "https://luminafi.com/api/seed/categorias?key=TU_SEED_KEY"
+# Admin bloqueado: restablecer su contraseña al valor de ADMIN_PASSWORD
+docker exec lumina_app wget -qO- --header="x-setup-key: TU_SEED_KEY" "http://localhost:3000/api/admin/setup?resetPassword=1"
 
 # Ver logs
 docker logs -f lumina_app
@@ -583,7 +587,7 @@ docker exec lumina_app npx prisma migrate status
 - Historial con filtros/charts
 - TopBar: settings modal con botón admin (si isAdmin), dark mode, cambiar contraseña, notificaciones
 - Dark mode completo con anti-FOUC
-- Sidebar (desktop) + BottomNav (mobile) con 9 items
+- Sidebar (desktop) + BottomNav (mobile) con 10 items (incluye Calculadoras)
 - Panel admin (`/admin`): tema-aware, categorías CRUD, cuentas CRUD por usuario, usuarios con cascade delete, clave de registro
 - Botón admin en settings modal del TopBar (solo visible si isAdmin)
 - Registro controlado con clave de acceso
@@ -595,7 +599,7 @@ docker exec lumina_app npx prisma migrate status
 - **Balance de cuentas**: se actualiza atómicamente (`$transaction`) al crear/editar/eliminar ingresos y gastos
 - **Toast global** (`useToast()`): feedback de éxito/error en todas las páginas CRUD
 - **Ingresos**: resumen muestra total real del mes actual (no solo `MONTHLY`)
-- **Presupuestos**: barra de progreso usa gasto real del mes por categoría (matching por nombre, case-insensitive)
+- **Presupuestos**: cada uno sigue una categoría (`categoryId`); el gasto del mes (gastos + compras con tarjeta, calendario de Colombia) lo calcula el servidor
 - **Filtros avanzados en /ingresos**: búsqueda por texto (nombre/categoría/cuenta) + selector de mes dinámico; summary card refleja el período seleccionado
 - **Filtros avanzados en /gastos**: búsqueda por texto + selector de mes + filtro de categoría (los tres combinables); summary refleja total filtrado
 - **Exportar CSV desde /historial**: botón junto al buscador descarga las transacciones filtradas actuales con BOM UTF-8; nombre incluye período y fecha
@@ -604,7 +608,7 @@ docker exec lumina_app npx prisma migrate status
 ### Bugs pendientes
 1. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
 2. **IA:** Función local sin LLM real
-3. **paidInstallments en compras:** El campo existe pero no se incrementa al hacer abonos a tarjetas
+3. ~~paidInstallments en compras~~ — resuelto: las cuotas se derivan de la fecha (`lib/cards.ts`)
 
 ### Roadmap (desde `/about`)
 - v1.0–v1.3: completos ✓
@@ -667,3 +671,32 @@ Para entrar a la app sin base de datos: ir a /auth/login y usar el botón "Acces
 
 Espera la siguiente instrucción.
 ```
+
+---
+
+## 16. Qué cuenta como gasto (Fase 5)
+
+- Una **compra con tarjeta** cuenta completa en su fecha y categoría (no cuando se paga). Aplica a dashboard, flujo de caja, historial, presupuestos y `/gastos`.
+- El **abono a tarjeta** genera un `Expense` (categoría de sistema "Abono Tarjeta") solo para descontar la cuenta; **no suma como gasto** (filtro `NOT_CARD_PAYMENT` en `lib/finance.ts`) y no se lista en el historial.
+- Los **pagos de deuda** sí cuentan como gasto (una deuda no tiene registro de compra propio).
+- Tasas: las tasas se piden como **E.A.**; se convierten con `(1+EA)^(1/12) − 1` (`lib/finance-math.ts`).
+- `GET /api/admin/conciliacion` (solo lectura) compara cada saldo con la suma de sus movimientos para detectar descuadres.
+
+## 17. Infraestructura y pruebas (Fase 6)
+
+- Prisma 6; `npm run typecheck`, `npm run lint` (ESLint 9 flat config), `npm run test:unit`, `npm run test:e2e` (ver `tests/README.md`).
+- CI en `.github/workflows/ci.yml`: tipos, lint, unitarias, `prisma migrate deploy` + `migrate diff --exit-code` (el esquema y las migraciones no pueden divergir), build y e2e contra Postgres.
+- `docker-compose.yml` es solo para desarrollo (la BD; la app queda tras `--profile app`). Producción: `docker-compose.prod.yml` o `docker-compose.homelab.yml`.
+- `scripts/restore.sh` restaura en una BD temporal, la valida y solo entonces la intercambia; hace un backup previo y detiene/reinicia la app.
+- Montos: siguen en `Float` (decisión I5, ver `docs/DECISIONES.md`).
+
+## 18. Interfaz y seguridad web (Fase 7)
+
+- Cabeceras en `next.config.mjs`: CSP (`script-src` lleva `'unsafe-inline'` por los scripts en línea de Next y el del tema), `frame-ancestors 'none'`. Sin `X-XSS-Protection` (obsoleto).
+- Colores: solo tokens del tema (`globals.css`), incluidos `--color-warning` y la paleta `--chart-N`, que tienen variante oscura. Evitar hex fijos.
+- `ThemeProvider` depende de `useAuth`: al iniciar o cerrar sesión se carga (o reinicia) la preferencia de tema.
+- Historial: peticiones con `AbortController`, errores visibles con "Reintentar"; CSV con `;`, `\r\n` y escape de fórmulas (`=`, `+`, `-`, `@`).
+- `/api/demo-login` devuelve `isAdmin: false`; el botón demo solo se muestra fuera de producción.
+- `public/manifest.json` + `icon.svg`; `/calculadoras` está en el menú.
+- Validadores: los `z.number()` muestran "Ingresa un número válido" cuando el campo queda vacío (`NaN`).
+- Estado: el CONTEXT refleja el código tras las fases 1-7; las secciones antiguas de "estado actual" (sección 13) son históricas.

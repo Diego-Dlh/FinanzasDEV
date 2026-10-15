@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateToken, verifyPassword, hashPassword } from '@/lib/auth';
+import { authenticateToken, verifyPassword, hashPassword, createToken } from '@/lib/auth';
+import { changePasswordApiSchema } from '@/lib/validators';
+import { api, parseBody } from '@/lib/http';
 
-export async function PUT(request: Request) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handlePut(request: Request) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const { currentPassword, newPassword } = await request.json();
-  if (!currentPassword || !newPassword) {
-    return NextResponse.json({ error: 'Datos incompletos' }, { status: 400 });
-  }
-  if (newPassword.length < 6) {
-    return NextResponse.json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' }, { status: 400 });
-  }
+  const { currentPassword, newPassword } = await parseBody(request, changePasswordApiSchema);
 
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
@@ -20,8 +16,18 @@ export async function PUT(request: Request) {
   const valid = await verifyPassword(currentPassword, user.password);
   if (!valid) return NextResponse.json({ error: 'Contraseña actual incorrecta' }, { status: 400 });
 
-  const hashed = await hashPassword(newPassword);
-  await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+  // Bumping tokenVersion signs out every other session (a stolen token stops working);
+  // this device gets a fresh token so it stays signed in.
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { password: await hashPassword(newPassword), tokenVersion: { increment: 1 } },
+  });
 
-  return NextResponse.json({ ok: true, message: 'Contraseña actualizada correctamente' });
+  return NextResponse.json({
+    ok: true,
+    message: 'Contraseña actualizada correctamente',
+    token: createToken({ userId, tokenVersion: updated.tokenVersion }),
+  });
 }
+
+export const PUT = api(handlePut);

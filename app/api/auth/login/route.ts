@@ -2,15 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, createToken } from '@/lib/auth';
 import { loginSchema } from '@/lib/validators';
+import { api, parseBody } from '@/lib/http';
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const parse = loginSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
-  }
+async function handlePost(request: Request) {
+  const { email, password } = await parseBody(request, loginSchema);
 
-  const { email, password } = parse.data;
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
     return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
@@ -21,6 +17,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
   }
 
-  const token = createToken({ userId: user.id });
+  const token = createToken({ userId: user.id, tokenVersion: user.tokenVersion });
   return NextResponse.json({ token, user: { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin } });
 }
+
+export const POST = api(handlePost);

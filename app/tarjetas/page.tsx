@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CreditCard, Plus, Trash2, Pencil, ChevronLeft, ShoppingCart, Wallet } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { fmtDate, todayISO } from '@/lib/dates';
+import { calcCardPayment, installmentsRemaining, isInstallmentActive } from '@/lib/cards';
 import { creditCardSchema, cardPurchaseSchema, cardPaymentSchema, type CreditCardInput, type CardPurchaseInput, type CardPaymentInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -55,13 +57,8 @@ function fmt(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
 
-function calcMinPayment(card: CreditCardData) {
-  const active = card.purchases.filter((p) => p.paidInstallments < p.installments);
-  const cuotasMes = active.reduce((s, p) => s + p.installmentAmt, 0);
-  const interesMes = card.usedBalance * (card.interestRate / 100);
-  const minPayment = Math.max(card.usedBalance * 0.05, cuotasMes + interesMes);
-  return { cuotasMes, interesMes, minPayment };
-}
+// Installment schedule and suggested payment live in lib/cards.ts
+const calcMinPayment = calcCardPayment;
 
 export default function TarjetasPage() {
   const { user, isLoading } = useProtected();
@@ -117,6 +114,8 @@ export default function TarjetasPage() {
     }
   }
 
+  // Load once per session; loadData reads selectedCard only to refresh the open detail
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user) loadData(); }, [user]);
 
   function openAddCard() {
@@ -181,7 +180,7 @@ export default function TarjetasPage() {
 
   function openPurchaseModal() {
     setPurchasePreview(null);
-    purchaseForm.reset({ date: new Date().toISOString().split('T')[0], installments: 1 });
+    purchaseForm.reset({ date: todayISO(), installments: 1 });
     setShowPurchaseModal(true);
   }
 
@@ -195,6 +194,7 @@ export default function TarjetasPage() {
 
   async function onPurchaseSubmit(data: CardPurchaseInput) {
     if (!selectedCard) return;
+    setError('');
     try {
       await api.post(`/tarjetas/${selectedCard.id}/compras`, data);
       setShowPurchaseModal(false);
@@ -209,10 +209,13 @@ export default function TarjetasPage() {
   async function handleDeletePurchase(purchaseId: string) {
     if (!selectedCard) return;
     if (!confirm('¿Eliminar esta compra?')) return;
+    setError('');
     try {
       await api.delete(`/tarjetas/${selectedCard.id}/compras/${purchaseId}`);
+      toast.success('Compra eliminada');
       await loadData();
     } catch (e) {
+      toast.error((e as Error).message);
       setError((e as Error).message);
     }
   }
@@ -221,9 +224,9 @@ export default function TarjetasPage() {
     const { minPayment } = calcMinPayment(selectedCard!);
     setAbonoError('');
     abonoForm.reset({
-      amount: Math.round(minPayment),
+      amount: Math.min(Math.round(minPayment), selectedCard!.usedBalance),
       note: '',
-      paidAt: new Date().toISOString().split('T')[0],
+      paidAt: todayISO(),
       accountId: '',
     });
     setShowAbonoModal(true);
@@ -288,7 +291,6 @@ export default function TarjetasPage() {
         {selectedCard ? (
           <CardDetail
             card={selectedCard}
-            categories={categories}
             onBack={() => setSelectedCard(null)}
             onEdit={() => openEditCard(selectedCard)}
             onDelete={() => handleDeleteCard(selectedCard.id)}
@@ -663,7 +665,6 @@ function CardSummaryItem({
 
 function CardDetail({
   card,
-  categories,
   onBack,
   onEdit,
   onDelete,
@@ -673,7 +674,6 @@ function CardDetail({
   onDeleteAbono,
 }: {
   card: CreditCardData;
-  categories: Category[];
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -687,7 +687,7 @@ function CardDetail({
   const available = limit - used;
   const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
   const { cuotasMes, interesMes, minPayment } = calcMinPayment(card);
-  const activePurchases = card.purchases.filter((p) => p.paidInstallments < p.installments);
+  const activePurchases = card.purchases.filter((p) => isInstallmentActive(p));
   const barColor = pct >= 90 ? 'bg-error' : pct >= 70 ? 'bg-tertiary' : 'bg-secondary';
 
   return (
@@ -798,7 +798,7 @@ function CardDetail({
                   <div className="min-w-0">
                     <p className="font-semibold text-sm text-secondary">{fmt(payment.amount)}</p>
                     <p className="text-xs text-on-surface-variant">
-                      {new Date(payment.paidAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {fmtDate(payment.paidAt)}
                     </p>
                     {payment.note && (
                       <p className="text-xs text-on-surface-variant truncate">{payment.note}</p>
@@ -836,7 +836,7 @@ function CardDetail({
         ) : (
           <div className="space-y-3">
             {activePurchases.map((p) => {
-              const remaining = p.installments - p.paidInstallments;
+              const remaining = installmentsRemaining(p);
               return (
                 <div
                   key={p.id}
@@ -850,14 +850,14 @@ function CardDetail({
                       <p className="font-semibold text-sm text-on-surface truncate">{p.description}</p>
                       <p className="text-xs text-on-surface-variant">{p.category.name}</p>
                       <p className="text-xs text-on-surface-variant">
-                        {new Date(p.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {fmtDate(p.date)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-semibold text-sm text-on-surface">{fmt(p.installmentAmt)}/cuota</p>
                     <p className="text-xs text-on-surface-variant">
-                      {remaining} de {p.installments} cuotas
+                      {remaining} de {p.installments} cuotas por pagar
                     </p>
                     <p className="text-xs text-on-surface-variant">{fmt(p.totalAmount)} total</p>
                   </div>

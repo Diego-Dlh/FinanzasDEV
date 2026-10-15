@@ -4,7 +4,7 @@ import { TopBar } from '@/components/layout/topbar';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { PageSpinner } from '@/components/ui/spinner';
 import {
-  Sparkles, GitBranch, Shield, TrendingUp, TrendingDown, CreditCard,
+  Sparkles, GitBranch, TrendingUp, TrendingDown, CreditCard,
   Target, Landmark, BarChart2, History, Cpu, Globe,
 } from 'lucide-react';
 

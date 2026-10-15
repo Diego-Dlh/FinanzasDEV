@@ -1,42 +1,41 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
-import { debtSchema } from '@/lib/validators';
+import { debtUpdateSchema } from '@/lib/validators';
+import { dateOnlyToUTC } from '@/lib/dates';
+import { api, parseBody } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function PUT(request: Request, { params }: Params) {
+async function handlePut(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
   const existing = await prisma.debt.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  const body = await request.json();
-  const parse = debtSchema.partial().safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
-  }
+  // The balance may be set to 0 here (debt paid off)
+  const data = await parseBody(request, debtUpdateSchema);
 
   const debt = await prisma.debt.update({
     where: { id },
     data: {
-      name:         parse.data.name         ?? existing.name,
-      entity:       parse.data.entity       ?? existing.entity,
-      balance:      parse.data.balance      ?? existing.balance,
-      interestRate: parse.data.interestRate ?? existing.interestRate,
-      minPayment:   parse.data.minPayment   ?? existing.minPayment,
-      dueDate:      parse.data.dueDate      ? new Date(parse.data.dueDate) : existing.dueDate,
+      name:         data.name         ?? existing.name,
+      entity:       data.entity       ?? existing.entity,
+      balance:      data.balance      ?? existing.balance,
+      interestRate: data.interestRate ?? existing.interestRate,
+      minPayment:   data.minPayment   ?? existing.minPayment,
+      dueDate:      data.dueDate      ? dateOnlyToUTC(data.dueDate) : existing.dueDate,
     },
   });
   return NextResponse.json({ debt });
 }
 
-export async function DELETE(request: Request, { params }: Params) {
+async function handleDelete(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
@@ -68,3 +67,6 @@ export async function DELETE(request: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = api(handlePut);
+export const DELETE = api(handleDelete);

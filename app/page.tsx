@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { TrendingUp, TrendingDown, CreditCard } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { fmtDate } from '@/lib/dates';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
 import { CashFlowChart } from '@/components/dashboard/cashflow-chart';
@@ -50,23 +51,47 @@ export default function HomePage() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    if (!user) return;
+  function loadDashboard() {
+    setLoadingData(true);
+    setLoadError('');
     api.get<DashboardData>('/dashboard')
       .then(setData)
-      .catch(console.error)
+      .catch((e) => setLoadError((e as Error).message))
       .finally(() => setLoadingData(false));
+  }
+
+  useEffect(() => {
+    if (user) loadDashboard();
   }, [user]);
 
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
-  const d = data ?? {
-    totalBalance: 0, monthlyIncome: 0, monthlyExpenses: 0,
-    totalDebt: 0, netWorth: 0, healthScore: 50,
-    transactions: [], cashFlow: [], accountsCount: 0,
-  };
+  // Never show placeholder figures as if they were the user's real balance
+  if (!data) {
+    return (
+      <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
+        <TopBar title="Lumina Finance" />
+        <section className="pt-24 px-6 max-w-2xl lg:max-w-5xl mx-auto">
+          <div className="glass-card rounded-[24px] p-8 text-center shadow-card space-y-4">
+            <p className="text-on-surface font-semibold">No pudimos cargar tu resumen</p>
+            <p className="text-sm text-on-surface-variant">{loadError || 'Intenta de nuevo en unos minutos.'}</p>
+            <button
+              onClick={loadDashboard}
+              className="rounded-2xl bg-secondary px-5 py-2.5 text-sm font-semibold text-on-secondary hover:opacity-90 transition"
+            >
+              Reintentar
+            </button>
+          </div>
+        </section>
+        <BottomNav />
+      </main>
+    );
+  }
+
+  const d = data;
 
   const scoreOffset = 251.2 - (251.2 * d.healthScore) / 100;
   const overviewCards = [
@@ -102,13 +127,13 @@ export default function HomePage() {
           <div className="glass-card rounded-[24px] p-5 flex flex-col items-center justify-center gap-3 shadow-card">
             <div className="relative w-20 h-20">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                <circle cx="50" cy="50" r="40" stroke="#e4e2e4" strokeWidth="8" fill="none" />
+                <circle cx="50" cy="50" r="40" strokeWidth="8" fill="none" className="stroke-surface-container-highest" />
                 <circle
-                  cx="50" cy="50" r="40" stroke="#006e2a" strokeWidth="8" fill="none"
+                  cx="50" cy="50" r="40" strokeWidth="8" fill="none"
                   strokeLinecap="round"
                   strokeDasharray="251.2"
                   strokeDashoffset={scoreOffset}
-                  className="transition-all duration-700"
+                  className="stroke-secondary transition-all duration-700"
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-primary">
@@ -189,7 +214,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <p className="font-medium text-primary text-sm">{tx.title}</p>
-                      <p className="text-xs text-on-surface-variant">{tx.category} · {new Date(tx.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</p>
+                      <p className="text-xs text-on-surface-variant">{tx.category} · {fmtDate(tx.date, { day: 'numeric', month: 'short' })}</p>
                     </div>
                   </div>
                   <p className={`text-sm font-semibold ${tx.type === 'income' ? 'text-secondary' : 'text-error'}`}>

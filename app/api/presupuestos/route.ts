@@ -1,33 +1,52 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateToken } from '@/lib/auth';
+import { authenticateToken, DEMO_USER_ID } from '@/lib/auth';
 import { budgetSchema } from '@/lib/validators';
+import { currentMonthISO, monthRangeUTC } from '@/lib/dates';
+import { api, HttpError, parseBody } from '@/lib/http';
+import { validateCategory } from '@/lib/categories';
+import { spentByCategory } from '@/lib/finance';
 
-export async function GET(request: Request) {
+// GET: each budget comes with `spent` = this month's spending in its category
+// (expenses + card purchases, Colombia calendar month). It is computed, not stored.
+async function handleGet(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  if (userId === DEMO_USER_ID) return NextResponse.json({ budgets: [] });
 
-  try {
-    const budgets = await prisma.budget.findMany({ where: { userId }, orderBy: { updatedAt: 'desc' } });
-    return NextResponse.json({ budgets });
-  } catch {
-    return NextResponse.json({ budgets: [] });
-  }
+  const budgets = await prisma.budget.findMany({
+    where: { userId },
+    orderBy: { updatedAt: 'desc' },
+    include: { category: { select: { id: true, name: true } } },
+  });
+  const { start, end } = monthRangeUTC(currentMonthISO());
+  const spent = await spentByCategory(
+    userId,
+    budgets.flatMap((b) => (b.categoryId ? [b.categoryId] : [])),
+    start,
+    end,
+  );
+  return NextResponse.json({
+    budgets: budgets.map((b) => ({ ...b, spent: b.categoryId ? spent.get(b.categoryId) ?? 0 : 0 })),
+  });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const body = await request.json();
-  const parse = budgetSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
-  }
+  const { name, allocated, categoryId } = await parseBody(request, budgetSchema);
+  await validateCategory(categoryId, 'EXPENSE');
 
-  const { name, allocated } = parse.data;
-  const budget = await prisma.budget.create({ data: { userId, name, allocated, spent: 0 } });
+  // One budget per category, otherwise the same spending would be counted twice
+  const duplicate = await prisma.budget.findFirst({ where: { userId, categoryId } });
+  if (duplicate) throw new HttpError(409, 'Ya tienes un presupuesto para esa categoría');
+
+  const budget = await prisma.budget.create({ data: { userId, name, allocated, categoryId } });
   return NextResponse.json({ budget }, { status: 201 });
 }
+
+export const GET = api(handleGet);
+export const POST = api(handlePost);

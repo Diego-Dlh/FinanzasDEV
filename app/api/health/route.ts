@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { api } from '@/lib/http';
 
-export async function GET() {
+async function handleGet() {
   const timestamp = new Date().toISOString();
 
   try {
@@ -17,3 +18,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = api(handleGet);

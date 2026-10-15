@@ -113,6 +113,9 @@ export default function LoginPage() {
             </Link>
           </p>
 
+          {/* The demo route answers 403 in production, so don't offer it there */}
+          {process.env.NODE_ENV !== 'production' && (
+            <>
           <div className="relative flex items-center gap-3">
             <div className="flex-1 h-px bg-outline-variant/30" />
             <span className="text-xs text-on-surface-variant">o</span>
@@ -128,6 +131,8 @@ export default function LoginPage() {
             <FlaskConical size={16} />
             {demoLoading ? 'Cargando...' : 'Acceso demo (sin base de datos)'}
           </button>
+            </>
+          )}
         </form>
       </div>
     </main>

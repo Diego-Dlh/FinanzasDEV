@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Bell, LogOut, Moon, Sun, Lock, Trash2, CheckCheck, X, Shield } from 'lucide-react';
+import { Bell, LogOut, Moon, Sun, Lock, CheckCheck, X, Shield } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -10,6 +10,9 @@ import { api } from '@/lib/api';
 import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validators';
 import { Modal } from '@/components/ui/modal';
 import { Field, Input, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
+
+export const ALERTS_REFRESH_EVENT = 'lumina:alerts-refresh';
 
 interface Alert {
   id: string;
@@ -21,13 +24,17 @@ interface Alert {
 
 export function TopBar({ title }: { title: string }) {
   const { user, logout } = useAuth();
-  const { isDark, toggle, setDark } = useTheme();
+  const { isDark, toggle } = useTheme();
   const router = useRouter();
+  const toast = useToast();
+  const toastError = (err: unknown, fallback: string) =>
+    toast.error(err instanceof Error && err.message ? err.message : fallback);
 
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsOn, setNotificationsOn] = useState(true);
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwError, setPwError] = useState('');
 
@@ -36,16 +43,39 @@ export function TopBar({ title }: { title: string }) {
     resolver: zodResolver(changePasswordSchema) as any,
   });
 
-  // Load alerts + unread count on mount
+  // Load alerts + unread count on mount, and again when new alerts are generated
   useEffect(() => {
     if (!user) return;
-    api.get<{ alerts: Alert[]; unreadCount: number }>('/alertas')
-      .then((res) => {
-        setAlerts(res.alerts);
-        setUnreadCount(res.unreadCount);
-      })
-      .catch(() => {});
+    const loadAlerts = () => {
+      api.get<{ alerts: Alert[]; unreadCount: number }>('/alertas')
+        .then((res) => {
+          setAlerts(res.alerts);
+          setUnreadCount(res.unreadCount);
+        })
+        .catch(() => {});
+    };
+    loadAlerts();
+    window.addEventListener(ALERTS_REFRESH_EVENT, loadAlerts);
+    return () => window.removeEventListener(ALERTS_REFRESH_EVENT, loadAlerts);
   }, [user]);
+
+  // Load the automatic-alerts preference when the settings modal opens
+  useEffect(() => {
+    if (!showSettings) return;
+    api.get<{ setting: { notifications: boolean } }>('/configuracion')
+      .then((res) => setNotificationsOn(res.setting.notifications))
+      .catch(() => {});
+  }, [showSettings]);
+
+  async function handleNotificationsToggle() {
+    const next = !notificationsOn;
+    setNotificationsOn(next);
+    try {
+      await api.put('/configuracion', { notifications: next });
+    } catch {
+      setNotificationsOn(!next); // roll back if the server rejected it
+    }
+  }
 
   function handleLogout() {
     logout();
@@ -61,32 +91,46 @@ export function TopBar({ title }: { title: string }) {
   }
 
   async function handleMarkAllRead() {
-    await api.put('/alertas', { markAllRead: true });
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    setUnreadCount(0);
+    try {
+      await api.put('/alertas', { markAllRead: true });
+      setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      toastError(err, 'No se pudieron marcar las alertas');
+    }
   }
 
   async function handleMarkOneRead(id: string) {
-    await api.put(`/alertas/${id}`, {});
-    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
-    setUnreadCount((n) => Math.max(0, n - 1));
+    try {
+      await api.put(`/alertas/${id}`, {});
+      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
+      setUnreadCount((n) => Math.max(0, n - 1));
+    } catch (err) {
+      toastError(err, 'No se pudo marcar la alerta');
+    }
   }
 
   async function handleDeleteAlert(id: string) {
     const wasUnread = alerts.find((a) => a.id === id)?.read === false;
-    await api.delete(`/alertas/${id}`);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-    if (wasUnread) setUnreadCount((n) => Math.max(0, n - 1));
+    try {
+      await api.delete(`/alertas/${id}`);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+      if (wasUnread) setUnreadCount((n) => Math.max(0, n - 1));
+    } catch (err) {
+      toastError(err, 'No se pudo eliminar la alerta');
+    }
   }
 
   async function onChangePassword(data: ChangePasswordInput) {
     setPwError('');
     setPwSuccess('');
     try {
-      await api.put('/auth/cambiar-password', {
+      const res = await api.put<{ token: string }>('/auth/cambiar-password', {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       });
+      // The password change signs out every session; this device gets a fresh token
+      if (res.token) localStorage.setItem('auth_token', res.token);
       setPwSuccess('Contraseña actualizada correctamente.');
       pwForm.reset();
     } catch (e) {
@@ -202,6 +246,37 @@ export function TopBar({ title }: { title: string }) {
                   <span
                     className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
                       isDark ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Automatic alerts */}
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant mb-3">Notificaciones</p>
+              <div className="flex items-center justify-between rounded-2xl bg-surface-container-low px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <Bell size={18} className={notificationsOn ? 'text-primary' : 'text-on-surface-variant'} />
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">Alertas de vencimiento</p>
+                    <p className="text-xs text-on-surface-variant">
+                      {notificationsOn ? 'Te avisamos de deudas y tarjetas por vencer' : 'No se generan alertas automáticas'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleNotificationsToggle}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                    notificationsOn ? 'bg-secondary' : 'bg-surface-container-highest'
+                  }`}
+                  aria-checked={notificationsOn}
+                  aria-label="Alertas de vencimiento"
+                  role="switch"
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      notificationsOn ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>

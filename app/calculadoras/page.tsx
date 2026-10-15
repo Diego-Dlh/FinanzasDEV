@@ -1,15 +1,15 @@
 'use client';
 import { useState } from 'react';
-import { Calculator, TrendingUp, Percent, Shield, ChevronDown, ChevronUp, PiggyBank, Target } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Shield, ChevronDown, ChevronUp, Target } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
 import { PageSpinner } from '@/components/ui/spinner';
+import { compoundGrowth, loanPayment, monthlyRateFromEA, monthlySavingsNeeded, parseNum } from '@/lib/finance-math';
 
 function fmt(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
-function fmtPct(n: number) { return `${n.toFixed(2)}%`; }
 
 // ── Simple Interest ──────────────────────────────────────────────────────────
 function SimpleInterestCalc() {
@@ -82,20 +82,18 @@ function CompoundInterestCalc() {
   const [years, setYears] = useState('');
   const [compound, setCompound] = useState('12');
   const [monthly, setMonthly] = useState('');
-  const [result, setResult] = useState<null | { total: number; interest: number; monthly: number }>(null);
+  const [result, setResult] = useState<null | { total: number; interest: number; contributed: number }>(null);
 
   function calculate() {
-    const p = parseFloat(principal);
-    const r = parseFloat(rate) / 100;
-    const n = parseInt(compound);
-    const t = parseFloat(years);
-    const m = parseFloat(monthly) || 0;
-    if (!p || !r || !n || !t) return;
+    const p = parseNum(principal) ?? 0;
+    const r = parseNum(rate);
+    const t = parseNum(years);
+    const m = parseNum(monthly) ?? 0;
+    // A 0% rate is valid; the capital may be 0 when there are monthly contributions
+    if (r === null || r < 0 || t === null || t <= 0 || p < 0 || m < 0 || (p === 0 && m === 0)) return;
 
-    const base = p * Math.pow(1 + r / n, n * t);
-    const monthlyTotal = m > 0 ? m * ((Math.pow(1 + r / n, n * t) - 1) / (r / n)) : 0;
-    const total = base + monthlyTotal;
-    setResult({ total, interest: total - p - m * t * 12, monthly: m });
+    const g = compoundGrowth({ principal: p, annualRatePercent: r, periodsPerYear: parseInt(compound), monthlyContribution: m, years: t });
+    setResult({ total: g.total, interest: g.interest, contributed: g.contributed });
   }
 
   const inputCls = 'w-full rounded-2xl border border-outline-variant/50 bg-surface py-3 px-4 text-sm outline-none transition focus:border-secondary focus:ring-1 focus:ring-secondary/30';
@@ -108,7 +106,7 @@ function CompoundInterestCalc() {
           <input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} className={inputCls} placeholder="5,000,000" />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-on-surface-variant">Tasa anual (%)</label>
+          <label className="text-xs font-medium text-on-surface-variant">Tasa nominal anual (%)</label>
           <input type="number" value={rate} onChange={e => setRate(e.target.value)} className={inputCls} placeholder="8" />
         </div>
       </div>
@@ -148,7 +146,7 @@ function CompoundInterestCalc() {
             </div>
             <div className="rounded-2xl bg-surface-container-low p-3 text-center">
               <p className="text-xs text-on-surface-variant mb-1">Capital aportado</p>
-              <p className="text-lg font-bold text-on-surface">{fmt(parseFloat(principal || '0') + result.monthly * parseFloat(years || '0') * 12)}</p>
+              <p className="text-lg font-bold text-on-surface">{fmt(result.contributed)}</p>
             </div>
           </div>
         </div>
@@ -165,11 +163,12 @@ function LoanPaymentCalc() {
   const [result, setResult] = useState<null | { payment: number; totalPaid: number; totalInterest: number }>(null);
 
   function calculate() {
-    const P = parseFloat(amount);
-    const r = parseFloat(rate) / 100 / 12;
-    const n = parseInt(months);
-    if (!P || !r || !n) return;
-    const payment = (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+    const P = parseNum(amount);
+    const ea = parseNum(rate);
+    const n = parseNum(months);
+    if (P === null || P <= 0 || ea === null || ea < 0 || n === null || n < 1 || !Number.isInteger(n)) return;
+    // The rate is effective annual (E.A.): convert it, don't just divide by 12
+    const payment = loanPayment(P, monthlyRateFromEA(ea), n);
     const totalPaid = payment * n;
     setResult({ payment, totalPaid, totalInterest: totalPaid - P });
   }
@@ -306,16 +305,13 @@ function SavingsGoalCalc() {
   const [result, setResult] = useState<null | { needed: number; withInterest: number }>(null);
 
   function calculate() {
-    const T = parseFloat(target);
-    const S = parseFloat(current) || 0;
-    const n = parseInt(months);
-    const r = parseFloat(rate) / 100 / 12;
-    if (!T || !n) return;
-    const remaining = T - S;
-    if (remaining <= 0) { setResult({ needed: 0, withInterest: 0 }); return; }
-    const needed = r > 0
-      ? (remaining * r) / (Math.pow(1 + r, n) - 1)
-      : remaining / n;
+    const T = parseNum(target);
+    const S = parseNum(current) ?? 0;
+    const n = parseNum(months);
+    const ea = parseNum(rate) ?? 0;
+    if (T === null || T <= 0 || n === null || n < 1 || !Number.isInteger(n) || S < 0 || ea < 0) return;
+    // What is already saved also earns interest, so it counts for more than its face value
+    const needed = monthlySavingsNeeded(T, S, monthlyRateFromEA(ea), n);
     setResult({ needed, withInterest: needed });
   }
 
@@ -339,7 +335,7 @@ function SavingsGoalCalc() {
           <input type="number" value={months} onChange={e => setMonths(e.target.value)} className={inputCls} placeholder="24" />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-on-surface-variant">Tasa anual % (opcional)</label>
+          <label className="text-xs font-medium text-on-surface-variant">Tasa efectiva anual % (opcional)</label>
           <input type="number" value={rate} onChange={e => setRate(e.target.value)} className={inputCls} placeholder="5" />
         </div>
       </div>

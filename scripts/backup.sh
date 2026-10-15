@@ -18,8 +18,9 @@ fail() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ❌ $*" >&2; exit 1; }
 
 # ─── Load env ─────────────────────────────────────────────────────────────────
 [ -f "${APP_DIR}/.env" ] || fail ".env not found"
-# shellcheck disable=SC1091
-set -a; source "${APP_DIR}/.env"; set +a
+# shellcheck source=scripts/lib-env.sh
+source "${APP_DIR}/scripts/lib-env.sh"
+load_env "${APP_DIR}/.env"
 
 : "${POSTGRES_DB:?POSTGRES_DB not set}"
 : "${POSTGRES_USER:?POSTGRES_USER not set}"

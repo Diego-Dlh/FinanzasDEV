@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateToken } from '@/lib/auth';
+import { authenticateToken, DEMO_USER_ID } from '@/lib/auth';
+import { addDaysISO, dateOnlyToUTC, todayISO } from '@/lib/dates';
+import { api } from '@/lib/http';
+import { NOT_CARD_PAYMENT, dashboardTotals } from '@/lib/finance';
 
 function calcHealthScore(
   monthlyIncome: number,
@@ -29,88 +32,87 @@ function calcHealthScore(
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-const MOCK_DASHBOARD = {
-  totalBalance: 5_500_000,
-  monthlyIncome: 5_500_000,
-  monthlyExpenses: 2_800_000,
-  totalDebt: 1_200_000,
-  netWorth: 4_300_000,
-  healthScore: 72,
-  transactions: [
-    { id: '1', title: 'Salario', category: 'Salario', amount: 5_500_000, type: 'income' as const, date: new Date().toISOString() },
-    { id: '2', title: 'Arriendo', category: 'Vivienda', amount: 1_200_000, type: 'expense' as const, date: new Date().toISOString() },
-    { id: '3', title: 'Supermercado', category: 'Alimentación', amount: 450_000, type: 'expense' as const, date: new Date().toISOString() },
-  ],
-  cashFlow: Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return {
-      name: d.toLocaleDateString('es-CO', { weekday: 'short' }),
+function weekdayLabel(ymd: string) {
+  return dateOnlyToUTC(ymd).toLocaleDateString('es-CO', { weekday: 'short', timeZone: 'UTC' });
+}
+
+function mockDashboard() {
+  const today = dateOnlyToUTC(todayISO()).toISOString();
+  return {
+    totalBalance: 5_500_000,
+    monthlyIncome: 5_500_000,
+    monthlyExpenses: 2_800_000,
+    totalDebt: 1_200_000,
+    netWorth: 4_300_000,
+    healthScore: 72,
+    transactions: [
+      { id: '1', title: 'Salario', category: 'Salario', amount: 5_500_000, type: 'income' as const, date: today },
+      { id: '2', title: 'Arriendo', category: 'Vivienda', amount: 1_200_000, type: 'expense' as const, date: today },
+      { id: '3', title: 'Supermercado', category: 'Alimentación', amount: 450_000, type: 'expense' as const, date: today },
+    ],
+    cashFlow: Array.from({ length: 7 }, (_, i) => ({
+      name: weekdayLabel(addDaysISO(todayISO(), i - 6)),
       income: i === 0 ? 5_500_000 : 0,
       expense: i === 1 ? 1_200_000 : i === 3 ? 450_000 : 0,
-    };
-  }),
-  accountsCount: 3,
-};
+    })),
+    accountsCount: 3,
+  };
+}
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
+  // Sample data is only for the demo login; a real user must never see it
+  if (userId === DEMO_USER_ID) return NextResponse.json(mockDashboard());
+
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
+    // Calendar dates are stored as UTC midnight; "today" is Colombia's
+    const today = todayISO();
+    const last7Days = Array.from({ length: 7 }, (_, i) => addDaysISO(today, i - 6));
+    const sevenDaysAgo = dateOnlyToUTC(last7Days[0]);
+    const tomorrow     = dateOnlyToUTC(addDaysISO(today, 1));
+    const week = { gte: sevenDaysAgo, lt: tomorrow };
+    // Card purchases count as spending on their date; card payments (abonos) don't
+    const cardInfo = { category: true, card: { select: { name: true } } } as const;
 
     const [
       accounts,
-      monthlyIncomes,
-      monthlyExpenses,
+      totals,
       debts,
       goals,
       recentIncomes,
       recentExpenses,
+      recentPurchases,
       cashFlowIncomes,
       cashFlowExpenses,
+      cashFlowPurchases,
       cards,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId, date: { gte: startOfMonth, lte: endOfMonth } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: startOfMonth, lte: endOfMonth } } }),
+      dashboardTotals(userId),
       prisma.debt.findMany({ where: { userId } }),
       prisma.goal.findMany({ where: { userId } }),
-      prisma.income.findMany({
-        where: { userId },
-        orderBy: { date: 'desc' },
-        take: 6,
-        include: { category: true },
-      }),
-      prisma.expense.findMany({
-        where: { userId },
-        orderBy: { date: 'desc' },
-        take: 6,
-        include: { category: true },
-      }),
-      // Cashflow: all incomes of the last 7 days — no take limit
-      prisma.income.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
+      prisma.income.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 6, include: { category: true } }),
+      prisma.expense.findMany({ where: { userId, ...NOT_CARD_PAYMENT }, orderBy: { date: 'desc' }, take: 6, include: { category: true } }),
+      prisma.cardPurchase.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 6, include: cardInfo }),
+      // Cashflow: everything of the last 7 days — no take limit
+      prisma.income.findMany({ where: { userId, date: week } }),
+      prisma.expense.findMany({ where: { userId, date: week, ...NOT_CARD_PAYMENT } }),
+      prisma.cardPurchase.findMany({ where: { userId, date: week } }),
       prisma.creditCard.findMany({ where: { userId } }),
     ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const totalBalance        = (accounts as any[]).filter((a) => !a.hideFromTotal).reduce((s: number, a: any) => s + a.balance, 0);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const visibleAccountsCount = (accounts as any[]).filter((a) => !a.hideFromTotal).length;
-    const totalMonthlyIncome  = monthlyIncomes.reduce((s, i) => s + i.amount, 0);
-    const totalMonthlyExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
-    const cardDebt            = cards.reduce((s, c) => s + c.usedBalance, 0);
-    const totalDebt           = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
-    const netWorth            = totalBalance - totalDebt;
-    const healthScore         = calcHealthScore(totalMonthlyIncome, totalMonthlyExpenses, totalDebt, goals.length);
+    const visibleAccounts      = accounts.filter((a) => !a.hideFromTotal);
+    const totalBalance         = visibleAccounts.reduce((s, a) => s + a.balance, 0);   // "Saldo disponible"
+    const allAccountsBalance   = accounts.reduce((s, a) => s + a.balance, 0);
+    const visibleAccountsCount = visibleAccounts.length;
+    const cardDebt             = cards.reduce((s, c) => s + c.usedBalance, 0);
+    const totalDebt            = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
+    // Hiding an account only removes it from the available balance, not from what you own
+    const netWorth             = allAccountsBalance - totalDebt;
+    const healthScore          = calcHealthScore(totals.scoreBasis.income, totals.scoreBasis.expense, totalDebt, goals.length);
 
     const transactions = [
       ...recentIncomes.map((i) => ({
@@ -121,33 +123,26 @@ export async function GET(request: Request) {
         id: e.id, title: e.description, category: e.category.name,
         amount: e.amount, type: 'expense' as const, date: e.date,
       })),
+      ...recentPurchases.map((p) => ({
+        id: p.id, title: `${p.description} · ${p.card.name}`, category: p.category.name,
+        amount: p.totalAmount, type: 'expense' as const, date: p.date,
+      })),
     ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 6);
 
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (6 - i));
-      return d;
-    });
-
-    const cashFlow = last7Days.map((day) => {
-      const dayStr = day.toLocaleDateString('es-CO', { weekday: 'short' });
-      const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-      const end   = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
-      const inc = cashFlowIncomes
-        .filter((i) => new Date(i.date) >= start && new Date(i.date) <= end)
-        .reduce((s, i) => s + i.amount, 0);
-      const exp = cashFlowExpenses
-        .filter((e) => new Date(e.date) >= start && new Date(e.date) <= end)
-        .reduce((s, e) => s + e.amount, 0);
-      return { name: dayStr, income: inc, expense: exp };
-    });
+    const dayOf = (d: Date) => d.toISOString().slice(0, 10);
+    const cashFlow = last7Days.map((day) => ({
+      name: weekdayLabel(day),
+      income:  cashFlowIncomes.filter((i) => dayOf(i.date) === day).reduce((s, i) => s + i.amount, 0),
+      expense: cashFlowExpenses.filter((e) => dayOf(e.date) === day).reduce((s, e) => s + e.amount, 0)
+             + cashFlowPurchases.filter((p) => dayOf(p.date) === day).reduce((s, p) => s + p.totalAmount, 0),
+    }));
 
     return NextResponse.json({
       totalBalance,
-      monthlyIncome: totalMonthlyIncome,
-      monthlyExpenses: totalMonthlyExpenses,
+      monthlyIncome: totals.thisMonth.income,
+      monthlyExpenses: totals.thisMonth.expense,
       totalDebt,
       netWorth,
       healthScore,
@@ -155,7 +150,13 @@ export async function GET(request: Request) {
       cashFlow,
       accountsCount: visibleAccountsCount,
     });
-  } catch {
-    return NextResponse.json(MOCK_DASHBOARD);
+  } catch (error) {
+    console.error('[dashboard]', error);
+    return NextResponse.json(
+      { error: 'No se pudieron cargar tus datos. Intenta de nuevo en unos minutos.' },
+      { status: 503 },
+    );
   }
 }
+
+export const GET = api(handleGet);

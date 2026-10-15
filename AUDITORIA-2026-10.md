@@ -1,0 +1,307 @@
+# Auditoría completa — Lumina Finance (FinanzasDEV)
+
+> **Fecha:** 2026-10-15 · **Rama:** `claude/repository-audit-uxrc25` · **Alcance:** todo el repositorio (rutas API, páginas y componentes, Prisma, Docker, Nginx, scripts de despliegue)
+> **Método:** revisión estática de cada archivo, trazando flujos reales (usuario → API → BD) para confirmar cada hallazgo. No se ejecutaron `tsc`, `build` ni tests (el repo no tiene tests y el entorno no permitió ejecutar comandos).
+> **Auditoría anterior:** `auditoria-lumina.md` (2026-06-23). Este documento la reemplaza como lista de trabajo; los pendientes de esa auditoría que siguen vigentes están incluidos aquí.
+
+---
+
+## 1. Resumen ejecutivo
+
+| Severidad | Cantidad | Significado |
+|-----------|----------|-------------|
+| 🔴 **Crítica** | 7 | Seguridad explotable hoy o funcionalidad rota/engañosa en producción |
+| 🟠 **Alta** | 15 | Corrupción de saldos, validación ausente en dinero, fechas mal mostradas a todos los usuarios |
+| 🟡 **Media** | 26 | Errores 500 evitables, lógica financiera imprecisa, deuda técnica de infraestructura |
+| 🟢 **Baja** | 12 | UX, consistencia de diseño, documentación |
+
+**Lo más urgente (hacer esta semana):**
+1. **C3/C4**: rotar la contraseña del admin, la `SEED_KEY` de Render y las contraseñas de usuarios reales que están en el repositorio. Hoy cualquiera que lea el repo puede tomar el control del panel admin en Render.
+2. **C1**: cerrar el IDOR que permite modificar el saldo de cuentas de **otros usuarios** al editar un ingreso o gasto.
+3. **C2**: impedir que cualquier usuario cree categorías globales.
+4. **C5**: bloquear el `JWT_SECRET` de ejemplo en producción.
+5. **C6**: las alertas automáticas de vencimiento **nunca se han ejecutado** (URL duplicada `/api/api/...`).
+
+---
+
+## 2. Hallazgos críticos 🔴
+
+### C1 — IDOR: editar un ingreso/gasto permite mover dinero en cuentas de otro usuario
+- **Archivos:** `app/api/ingresos/[id]/route.ts:24,43-44` · `app/api/gastos/[id]/route.ts:24,43-44`
+- **Problema:** el `PUT` toma `accountId` del body y hace `account.update({ where: { id: newAccountId } })` **sin verificar que la cuenta pertenezca al usuario**. El `POST` sí lo valida, el `PUT` no.
+- **Escenario:** el usuario A edita su ingreso con `accountId` = id de una cuenta del usuario B → el saldo de B se incrementa/decrementa y el ingreso de A queda ligado a la cuenta de B (que además aparecerá en el historial de A con el nombre de la cuenta de B).
+- **Solución:** antes de la transacción, si `accountChanged`, validar `prisma.account.findFirst({ where: { id: newAccountId, userId } })` → 404 si no existe.
+
+### C2 — Cualquier usuario puede crear categorías globales
+- **Archivo:** `app/api/categorias/route.ts:18-28`
+- **Problema:** `POST /api/categorias` solo exige estar autenticado. Las categorías son globales (compartidas por todos los usuarios), así que cualquier usuario puede inyectar categorías visibles para todos. Además no valida `type` ni duplicados → 500 por violación de unique o enum inválido.
+- **Solución:** eliminar el `POST` (ya existe `POST /api/admin/categorias` protegido) o exigir `requireAdmin`.
+
+### C3 — Toma de control del admin en Render con datos públicos del repo
+- **Archivos:** `render.yaml:23-24` (`SEED_KEY` en texto plano), `app/api/admin/setup/route.ts:7,20-28`, `CONTEXT.md:417`, `README.md`
+- **Problema:** la `SEED_KEY` de Render está en texto plano en el repo. `GET /api/admin/setup?key=...` **reescribe la contraseña del admin en cada llamada** con `ADMIN_PASSWORD ?? '<contraseña por defecto hardcodeada>'`, y esa contraseña por defecto también está documentada en `CONTEXT.md`.
+- **Escenario:** un atacante llama `https://finanzasdev.onrender.com/api/admin/setup?key=<SEED_KEY de render.yaml>` → la contraseña del admin vuelve al valor por defecto publicado → inicia sesión como admin → puede borrar usuarios, ver la clave de registro, editar saldos.
+- **Solución:**
+  1. Rotar `SEED_KEY` en Render y usar `sync: false` / `generateValue: true` en `render.yaml`.
+  2. Eliminar el fallback de contraseña hardcodeado: si falta `ADMIN_PASSWORD`, responder 500.
+  3. `setup` solo debe **crear** el admin si no existe; nunca sobrescribir la contraseña de uno existente.
+  4. Cambiar la contraseña del admin en todos los entornos.
+
+### C4 — Credenciales de usuarios reales en el código y en la respuesta HTTP
+- **Archivos:** `app/api/seed/route.ts:49,120,142,162-166`, `prisma/seed.ts`, `README.md:33-35`, `CONTEXT.md:12,417`
+- **Problema:** contraseñas de `diego@`, `melissa@` y `alex@` están en el código, en el README y se devuelven en el JSON de `/api/seed`. `CONTEXT.md` también expone la IP del VPS y la contraseña del admin.
+- **Solución:** cambiar esas contraseñas ya, quitar las credenciales del código y la documentación (usar variables de entorno o generarlas aleatoriamente), y no devolverlas en la respuesta. Considerar limpiar el historial de git (`git filter-repo`) si el repo es o será público (el roadmap habla de open source en v1.6).
+
+### C5 — El `JWT_SECRET` de ejemplo no se bloquea en producción
+- **Archivos:** `lib/auth.ts:7` vs `.env.example:20`
+- **Problema:** `getJwtSecret()` solo rechaza `change_this_secret` y `super_secure_change_me`, pero el `.env.example` usa `CHANGE_ME_minimum_32_chars_random_string`. Si alguien copia el `.env.example` sin editarlo, la app arranca con un secreto público y cualquiera puede firmar un token con el `userId` de cualquier usuario (incluido el admin).
+- **Solución:** en producción, rechazar cualquier secreto con `CHANGE_ME` o de menos de 32 caracteres.
+
+### C6 — Las alertas automáticas de vencimiento nunca se ejecutan
+- **Archivo:** `app/ClientLayout.tsx:18`
+- **Problema:** `api.post('/api/alertas/auto', {})`, pero `lib/api.ts:14` ya antepone `/api` → la petición va a `/api/api/alertas/auto` → 404, silenciado por `.catch(() => {})`. La funcionalidad F3 de la auditoría anterior está rota desde que se integró.
+- **Solución:** `api.post('/alertas/auto', {})`.
+
+### C7 — El dashboard muestra datos falsos como reales cuando falla la BD
+- **Archivo:** `app/api/dashboard/route.ts:158-160`
+- **Problema:** ante cualquier error, el endpoint responde `MOCK_DASHBOARD` (saldo de $5.500.000, salario, arriendo…) con status 200. En producción, un usuario real ve un saldo inventado sin ninguna advertencia. En una app financiera esto es grave.
+- **Solución:** responder 503 en producción y que la UI muestre un error; usar el mock solo cuando el usuario sea el demo (`userId === 'demo-user-id'`).
+
+---
+
+## 3. Hallazgos de severidad alta 🟠
+
+### Integridad de saldos y dinero
+
+**A1 — Condiciones de carrera en pagos y abonos (dobles cobros / saldos perdidos)**
+- `app/api/pagos/route.ts:38-57,86` · `app/api/tarjetas/[id]/abonos/route.ts:40-59,98` · `app/api/tarjetas/[id]/abonos/[paymentId]/route.ts:26`
+- Las validaciones (`amount ≤ saldo`) se hacen **fuera** de la transacción y el nuevo saldo de la deuda o tarjeta se calcula con un valor leído antes (`balance: newBalance`, una asignación absoluta en vez de `decrement`).
+- **Escenario:** doble clic en "Pagar" → se crean dos pagos y la cuenta se debita dos veces, pero la deuda solo baja una vez (la segunda escritura pisa la primera con el mismo `newBalance`).
+- **Solución:** usar `decrement`/`increment` y validar dentro de una transacción interactiva (o `updateMany` con `where: { balance: { gte: amount } }` y comprobar `count === 1`). En el cliente, deshabilitar el botón mientras se envía.
+
+**A2 — Se pierde dinero al restaurar el saldo de una tarjeta (`Math.min` con el cupo)**
+- `app/api/tarjetas/[id]/abonos/[paymentId]/route.ts:26` · `app/api/gastos/[id]/route.ts:88`
+- Al eliminar un abono, `usedBalance = min(creditLimit, usedBalance + amount)`. Si la tarjeta está sobre el cupo o el cupo se redujo, parte del abono "desaparece" y la deuda queda subestimada.
+- **Solución:** `usedBalance: { increment: amount }` sin recorte.
+
+**A3 — Gastos generados por pagos/abonos se pueden editar y desincronizan todo**
+- `app/api/gastos/[id]/route.ts` (PUT) · `app/gastos/page.tsx:107-118`
+- Los gastos "Pago: …" y "Abono: …" son editables desde /gastos. Si se cambia el monto o la cuenta, el `Payment`/`CardPayment`, la deuda y la tarjeta no se actualizan. Al eliminar después el pago, se reembolsa el monto **original** a la cuenta **original** → los saldos quedan descuadrados para siempre.
+- **Solución:** bloquear la edición (y mostrar un aviso) cuando el gasto tenga un pago vinculado, o propagar el cambio.
+
+**A4 — `POST /api/tarjetas/[id]/compras` sin validación**
+- `app/api/tarjetas/[id]/compras/route.ts:34-38`
+- `cardPurchaseSchema` existe pero no se usa. Un `totalAmount` negativo **reduce** la deuda de la tarjeta; `NaN` causa 500; `categoryId` puede ser de tipo INCOME o no existir (500); no se valida el cupo disponible.
+- **Solución:** `cardPurchaseSchema.safeParse`, validar la categoría (existe y es de tipo EXPENSE) y opcionalmente advertir si se supera el cupo.
+
+**A5 — Eliminar una compra deja el `usedBalance` en negativo**
+- `app/api/tarjetas/[id]/compras/[purchaseId]/route.ts:23`
+- Se resta el `totalAmount` completo aunque ya haya abonos. Ejemplo: compra de 1.000.000, abono de 1.000.000 (usedBalance 0), se borra la compra → usedBalance = −1.000.000.
+- **Solución:** no permitir saldo negativo (`Math.max(0, …)` dentro de la transacción) o impedir borrar compras cuando haya abonos posteriores.
+
+**A6 — Tarjetas: `POST` y `PUT` sin validación**
+- `app/api/tarjetas/route.ts:32-46` · `app/api/tarjetas/[id]/route.ts:36-48`
+- `creditCardSchema` existe pero no se usa. `dueDay: 99`, `creditLimit: "abc"` (NaN → 500) o `name` vacío se aceptan.
+- **Solución:** `creditCardSchema.safeParse` / `.partial()` en el PUT.
+
+**A7 — `paidInstallments` nunca se actualiza y el pago mínimo crece sin límite**
+- `app/tarjetas/page.tsx:58-64,221-228` (pendiente L3 de la auditoría anterior)
+- `calcMinPayment` suma las cuotas de **todas** las compras porque ninguna aparece como pagada. Con el tiempo, el "pago mínimo" sugerido supera el saldo real y el abono propuesto por defecto es rechazado por el servidor ("no puede superar el saldo").
+- **Solución mínima:** `minPayment = min(usedBalance, …)`. **Solución completa:** decidir la regla de negocio (por ejemplo, al hacer un abono, marcar cuotas como pagadas de la más antigua a la más reciente, o calcular las cuotas vigentes según la fecha de corte).
+
+**A8 — Saldos de cuentas históricos sin conciliar**
+- Pendiente de la auditoría anterior: los ingresos y gastos creados antes de la lógica de saldos no afectaron el `balance`. No hay un endpoint de recálculo.
+- **Solución:** endpoint admin `POST /api/admin/recalcular-balances` (saldo inicial + ingresos − gastos), con previsualización antes de aplicar.
+
+### Fechas y zona horaria (afectan a todos los usuarios)
+
+**D1 — Todas las fechas se muestran un día antes**
+- Las fechas `YYYY-MM-DD` se guardan como medianoche UTC (`new Date('2026-10-15')`) y se muestran con `toLocaleDateString` en el navegador, que en Colombia (UTC−5) las convierte a "14 oct".
+- Afecta: `app/gastos/page.tsx:246`, `app/ingresos/page.tsx:252`, `app/page.tsx:192`, `app/historial/page.tsx:114,382`, `app/tarjetas/page.tsx:801,853`, `app/deudas/page.tsx:333`.
+- **Solución:** crear un helper `fmtDate(d)` con `timeZone: 'UTC'` para fechas de calendario, o guardar las fechas a mediodía UTC.
+
+**D2 — Fecha por defecto y "mes actual" incorrectos después de las 7 p. m.**
+- `new Date().toISOString()` devuelve la fecha UTC: después de las 19:00 en Colombia, el formulario propone **mañana**, y el último día del mes el filtro abre en el **mes siguiente**.
+- Afecta: `app/gastos/page.tsx:49,103`, `app/ingresos/page.tsx:48,106`, `app/tarjetas/page.tsx:184,226`, `app/historial/page.tsx:47,129`, `app/deudas/page.tsx:83`.
+- **Solución:** helper `todayLocal()` con `getFullYear/getMonth/getDate`.
+
+**D3 — Los cortes de mes del servidor usan UTC**
+- `app/api/dashboard/route.ts:62-67,134-137`, `app/api/admin/stats/route.ts:10`
+- El contenedor corre en UTC. Los pagos y abonos se guardan con `new Date()` (hora real), así que un pago hecho el 31 a las 20:00 en Colombia cuenta en el mes **siguiente**, y el gráfico de 7 días corta los días a las 19:00 hora local.
+- **Solución:** `TZ=America/Bogota` en Docker/Render, o calcular los rangos con una zona horaria explícita (se recomienda guardar la zona horaria del usuario en `Setting`).
+
+**D4 — Presupuestos: los gastos del día 1 caen en el mes anterior**
+- `app/presupuestos/page.tsx:164-175`: compara medianoche UTC con el inicio de mes **local** del navegador → un gasto del 1 de octubre (00:00Z = 30 sep 19:00 COT) se excluye de octubre.
+
+### Seguridad adicional
+
+**S1 — Sesión expirada sin manejo (usuario atrapado)**
+- `lib/api.ts:17` y `lib/hooks/useAuth.tsx`: si el JWT expira (7 días), todas las llamadas devuelven 401 pero el usuario sigue "logueado" con pantallas vacías o con errores. No hay un logout automático.
+- **Solución:** en `request()`, si `res.status === 401` → borrar el token y redirigir a `/auth/login`.
+
+**S2 — Los tokens siguen siendo válidos tras cambiar la contraseña o borrar al usuario**
+- `lib/auth.ts:34-43`: `authenticateToken` no consulta la BD. Un token robado sigue siendo válido 7 días aunque se cambie la contraseña, y un usuario eliminado por el admin sigue haciendo peticiones (que fallan con errores de FK → 500).
+- **Solución:** añadir `tokenVersion` (o `passwordChangedAt`) en `User` e incluirlo en el JWT; validarlo en las rutas sensibles.
+
+**S3 — HSTS `preload` + certificado autofirmado = sitio inaccesible**
+- `nginx/conf.d/app.conf:21-22,31`: con HSTS (`includeSubDomains; preload`) los navegadores **no permiten** saltarse el aviso del certificado autofirmado. Si un navegador ya recibió la cabecera, el sitio queda bloqueado para ese usuario durante 2 años.
+- **Solución:** completar Let's Encrypt (pendiente v1.4) **antes** de enviar HSTS; mientras tanto, quitar `preload` y bajar `max-age`. Nota: el dominio de Nginx es `luminafi.xyz` y la documentación usa `luminafi.com`; hay que unificarlo.
+
+---
+
+## 4. Hallazgos de severidad media 🟡
+
+### Validación y manejo de errores
+
+| ID | Archivo(s) | Problema | Solución |
+|----|-----------|----------|----------|
+| **M1** | Todas las rutas con `await request.json()` | Un JSON mal formado lanza una excepción → 500 con traza | Helper `parseBody(request, schema)` que devuelva 400 |
+| **M2** | `presupuestos/[id]:16-24`, `metas/[id]:16-26`, `cuentas/[id]:26-29`, `admin/cuentas/[id]:12-21` | `Number(body.x)` sin validar → `NaN` (500) o montos negativos; el PUT de presupuestos permite fijar `spent` | Usar `budgetSchema.partial()`, `goalSchema.partial()`, etc. |
+| **M3** | `auth/login/route.ts:10`, `pagos/route.ts:30` | Devuelven `error: parse.error.flatten()` (un objeto) → el frontend muestra `[object Object]` | Devolver `issues[0].message` como el resto de rutas |
+| **M4** | `ingresos/route.ts:34-47`, `gastos/route.ts:34-47` (y sus PUT) | `categoryId` no se valida: si no existe → 500; se puede guardar un gasto con una categoría de ingreso | Validar existencia y `type` |
+| **M5** | GET de `alertas`, `tarjetas`, `tarjetas/[id]`, `compras`, `abonos`, `pagos`, `configuracion` y todas las rutas `admin/*` | Sin try/catch (contradice `CONTEXT.md`). El usuario demo recibe 500 en `/configuracion` porque el `upsert` falla por FK | Envolver en try/catch y unificar con un helper |
+| **M6** | `auth/register/route.ts:14,22`, `auth/login/route.ts:14` | El email no se normaliza (`Diego@x.com` ≠ `diego@x.com`) → cuentas duplicadas o logins fallidos | `email.trim().toLowerCase()` en el schema (`z.string().email().toLowerCase()`) |
+| **M7** | `auth/register/route.ts:22-48` | Condición de carrera en el email único → 500 en lugar de 409 | Capturar el error `P2002` de Prisma |
+| **M8** | `validators.ts:38`, `deudas/[id]` | `balance` debe ser `positive()`: no se puede marcar una deuda en 0 al editarla; las deudas pagadas (saldo 0) se quedan listadas para siempre sin estado "pagada" | Permitir `min(0)` en el PUT y añadir estado/filtro de deudas saldadas |
+| **M9** | `admin/cuentas/[id]:15-21`, `admin/categorias/[id]:20` | `update` sobre un id inexistente → 500 (no 404); `type` de cuenta sin validar | Validar con `findUnique` y un enum |
+| **M10** | `pagos/route.ts:63-67`, `abonos/route.ts:66-70`, `admin/categorias/[id]` | Las categorías de sistema "Pago de Deuda" y "Abono Tarjeta" se buscan **por nombre**: si el admin las renombra se crean de nuevo; además el usuario puede elegirlas a mano en /gastos | Marcar categorías de sistema (`isSystem`), ocultarlas en los selectores y protegerlas de renombrado o borrado |
+| **M11** | `api/seed/route.ts:18-37` | Usa `create` para las categorías: si ya se ejecutó `/api/seed/categorias`, el seed falla con un unique y queda **a medias** (no es transaccional). Los saldos sembrados no cuadran con los ingresos y gastos sembrados | Usar `upsert` + `$transaction`, o eliminar el endpoint de producción |
+
+### Lógica financiera
+
+| ID | Archivo(s) | Problema | Solución |
+|----|-----------|----------|----------|
+| **F1** | `dashboard/route.ts:105,112` | `netWorth = totalBalance − deuda`, pero `totalBalance` **excluye las cuentas ocultas** → el patrimonio baja cuando el usuario oculta una cuenta (p. ej. ahorros) | Calcular el patrimonio con todas las cuentas; ocultar solo afecta al "Saldo disponible" |
+| **F2** | `dashboard/route.ts:5-30,82-83` | Salud financiera: si aún no hay ingresos del mes → score 30 "Mejorar", aunque el usuario tenga un salario `MONTHLY`. El campo `frequency` no se usa en ningún cálculo | Proyectar los recurrentes o usar el promedio de los últimos 3 meses |
+| **F3** | `deudas/page.tsx:175`, `calculadoras/page.tsx:169,187,312` | La tasa anual se divide entre 12 (nominal), pero en Colombia las tasas se expresan como **E.A.** y la propia UI dice "Tasa efectiva anual" → la cuota calculada sale mal | `r = (1 + EA)^(1/12) − 1` |
+| **F4** | `deudas/page.tsx:174` | Con tasa 0 % la calculadora no muestra nada (`!tasaRaw`), aunque el código contempla `r === 0` | Validar con `isNaN` en lugar de truthiness |
+| **F5** | `calculadoras/page.tsx:95-98,151` | Interés compuesto con aportes: el aporte se capitaliza **por periodo de capitalización** (1 vez al año si es anual), pero el "capital aportado" asume 12 aportes al año → con capitalización anual, semestral o trimestral los intereses salen **negativos** | Simular mes a mes, o convertir la tasa a mensual efectiva |
+| **F6** | `presupuestos/page.tsx:208-209` | Si no hay gastos de esa categoría en el mes, se muestra el `spent` guardado (valores viejos o del seed) en lugar de 0. La relación presupuesto↔categoría se hace por nombre (frágil) | Añadir `categoryId` a `Budget` y usar 0 como valor por defecto |
+| **F7** | Modelo de datos | Las compras con tarjeta no aparecen en gastos, historial, presupuestos ni flujo de caja; solo se ve el abono (categoría "Abono Tarjeta"). El gasto real por categoría con tarjeta se pierde | Decisión de producto: contar las compras de tarjeta como gasto (en la fecha de compra) y los abonos como transferencias, no como gasto |
+| **F8** | `alertas/auto/route.ts:55-58` | `dueDay` 29-31 en meses cortos: `new Date(2026, 1, 31)` = 3 de marzo → fecha de pago incorrecta | Limitar al último día del mes |
+| **F9** | `alertas/auto/route.ts:26-28,32-34` | Deudas con `dueDate` vencida nunca generan alerta; `dueDate` es una sola fecha (no mensual); la ventana de deduplicación de 3 días repite la alerta 2-3 veces dentro de los 7 días; `Setting.notifications` se ignora en toda la app | Alerta única por ciclo de vencimiento; respetar `notifications`; alertar las deudas vencidas |
+
+### Infraestructura
+
+| ID | Archivo(s) | Problema | Solución |
+|----|-----------|----------|----------|
+| **I1** | `scripts/auto-deploy.sh`, `scripts/deploy.sh` | Cada push a `main` se despliega en 2 minutos **sin tests, sin typecheck y sin backup previo** a `prisma migrate deploy` | Ejecutar `backup.sh` antes de construir; CI con `tsc --noEmit` + lint antes de mergear |
+| **I2** | `scripts/restore.sh:38-42` | `DROP DATABASE` con la app conectada falla ("is being accessed by other users") | `docker stop lumina_app` antes y `start` después |
+| **I3** | `nginx/nginx.conf:43`, `app.conf:48-49` | Límite de la API: 30 req/min por IP. Una sola carga de página hace 3-5 llamadas (+ TopBar + tema + alertas); navegar rápido produce errores 429 | Subir a ~10 r/s con burst, y dejar el límite estricto solo para `/api/auth/` |
+| **I4** | `prisma/schema.prisma` | Sin índices en `userId`/`date`; sin `onDelete: Cascade`; `Payment.accountId/expenseId` y `CardPayment.accountId/expenseId` sin relación FK (huérfanos posibles); `Account.currency @default("USD")` (pendiente B7); `RegistrationKey.code` sin unique | Migración con `@@index([userId, date])`, relaciones con FK y default `COP` |
+| **I5** | `prisma/schema.prisma` | Montos en `Float` → errores de redondeo acumulados en sumas de saldos | `Decimal` o enteros (los COP no usan centavos) |
+| **I6** | `package.json` | Prisma 4 (sin soporte); `eslint-config-next@16` con `next@15` (versiones desalineadas); `next lint` está deprecado; no hay script `typecheck` ni tests | Actualizar a Prisma 5/6, alinear eslint-config-next, añadir `"typecheck": "tsc --noEmit"` |
+
+---
+
+## 5. Hallazgos de severidad baja 🟢
+
+| ID | Archivo(s) | Problema |
+|----|-----------|----------|
+| **B1** | `components/layout/topbar.tsx:63-80` | Las acciones de alertas (marcar o eliminar) no tienen try/catch → promesas rechazadas sin manejar y la UI se desincroniza |
+| **B2** | `app/historial/page.tsx:95-108` | Errores silenciados; si se cambian los filtros rápido, una respuesta vieja puede pisar a una nueva (no hay `AbortController`) |
+| **B3** | `app/historial/page.tsx:121-122` | CSV separado por comas: Excel en español (es-CO) espera `;` → todo cae en una sola columna. Riesgo de inyección de fórmulas si una descripción empieza por `=`, `+`, `-` o `@` |
+| **B4** | `app/layout.tsx:12` | Se referencia `/manifest.json`, pero `public/` solo contiene `.gitkeep` → 404 en cada carga |
+| **B5** | `app/calculadoras/page.tsx` | Página huérfana: no aparece en el sidebar ni en el bottomnav |
+| **B6** | `app/auth/login/page.tsx:122-130` | El botón "Acceso demo" se muestra en producción aunque la ruta responde 403. El demo entrega `isAdmin: true` a la UI (el backend lo rechaza, pero muestra el botón de admin) |
+| **B7** | `app/page.tsx:105,107`, `presupuestos/page.tsx:217-218`, `historial/page.tsx:82` | Colores hardcodeados (`#e4e2e4`, `#006e2a`, `bg-amber-50`, `PIE_COLORS`) que rompen la convención y el modo oscuro |
+| **B8** | `lib/hooks/useTheme.tsx:15-31` | El tema solo se sincroniza al montar la app; tras hacer login con otro usuario se mantiene el del anterior hasta recargar |
+| **B9** | Formularios con `valueAsNumber` | Un monto vacío produce `NaN` y el mensaje de Zod sale en inglés ("Expected number, received nan") |
+| **B10** | `lib/adminAuth.ts:14` | `generateKey` usa `Math.random` (no criptográfico); 6 caracteres sin límite de usos ni expiración |
+| **B11** | `nginx/conf.d/app.conf`, `next.config.mjs` | Sin `Content-Security-Policy`; `X-XSS-Protection` está obsoleto. Las claves `?key=SEED_KEY` quedan registradas en los access logs de Nginx |
+| **B12** | `CONTEXT.md` | Varias afirmaciones no coinciden con el código (todas las GET con try/catch, compras validadas, etc.) y contiene secretos (ver C4). Debe actualizarse después de las correcciones |
+
+---
+
+## 6. Plan de solución (lista de trabajo)
+
+> Orden recomendado: cada fase se puede entregar en un PR independiente. Marca `[x]` al completar.
+
+### Fase 0 — Acciones manuales inmediatas (sin código)
+- [ ] Cambiar la contraseña del admin en VPS y Render.
+- [ ] Rotar `SEED_KEY` en Render (y en el VPS si coincide).
+- [ ] Cambiar las contraseñas de `diego@`, `melissa@` y `alex@` (o eliminar los usuarios de prueba en producción).
+- [ ] Verificar que el `JWT_SECRET` de producción no sea el del `.env.example`; si hay dudas, rotarlo (cierra todas las sesiones).
+- [ ] Verificar si Render define `NODE_ENV=production` (si no, `/api/demo-login` está habilitado allí).
+
+### Fase 1 — Seguridad crítica (PR 1)
+- [x] **C1** Validar la propiedad de `accountId` en el PUT de ingresos y gastos.
+- [x] **C2** Eliminar o proteger `POST /api/categorias` (eliminado; queda `POST /api/admin/categorias`).
+- [x] **C3** `admin/setup`: sin contraseña por defecto, sin sobrescribir la contraseña existente (salvo `resetPassword=1`); `render.yaml` sin `SEED_KEY` en claro.
+- [x] **C4** Quitar credenciales de `prisma/seed.ts`, `README.md` y `CONTEXT.md`; `/api/seed` eliminado (también resuelve **M11**).
+- [x] **C5** Endurecer `getJwtSecret()` (bloquear `CHANGE_ME` y longitudes < 32); la app no arranca con un secreto inválido.
+- [x] **S1** Manejo de 401 en `lib/api.ts` y en el panel admin → logout automático.
+- [ ] **Pendiente manual:** las credenciales antiguas siguen en el **historial de git**. Rótalas (Fase 0) y, si el repo será público, límpialo con `git filter-repo`.
+
+### Fase 2 — Funcionalidad rota y datos engañosos (PR 2)
+- [x] **C6** Corregir la URL de `/alertas/auto`; la campana se refresca cuando se crean alertas.
+- [x] **C7** Quitar el mock del dashboard en producción (solo para el usuario demo); 503 + pantalla de error con "Reintentar".
+- [x] **D1** Helper `fmtDate` con `timeZone: 'UTC'` en todas las vistas (`lib/dates.ts`).
+- [x] **D2** Helpers `todayISO()` / `currentMonthISO()` (calendario de Colombia) para valores por defecto y filtros.
+- [x] **D3** Rangos con zona horaria explícita (`America/Bogota`) en dashboard, historial, alertas y stats; no depende del `TZ` del servidor. El gasto que genera un pago de deuda se guarda con fecha de calendario.
+- [x] **D4** Corregir la comparación de mes en presupuestos.
+- Nota: los gastos de pagos de deuda creados **antes** de este cambio guardaron la hora real; los hechos entre 19:00 y 24:00 (hora Colombia) se ven un día después. En el homelab (BD nueva) no aplica.
+
+### Fase 3 — Integridad de saldos (PR 3)
+- [x] **A1** Pagos y abonos atómicos: `UPDATE … WHERE saldo >= monto` dentro de la transacción (cuenta, deuda y tarjeta). También la eliminación de pagos, abonos y gastos vinculados revierte **una sola vez** (borrar primero, con comprobación de `count`). Los botones ya se desactivaban mientras se envía.
+- [x] **A2** Quitar el recorte `Math.min(creditLimit, …)` al restaurar abonos (en `abonos/[paymentId]` y en `gastos/[id]`).
+- [x] **A3** Bloquear la edición de gastos vinculados a pagos o abonos (409 en la API; la página oculta el lápiz y avisa qué pasa al eliminarlos). `GET /api/gastos` devuelve `linked`.
+- [x] **A4** `POST compras` valida con `cardPurchaseSchema`, la categoría (existe, es de gasto, no es de sistema) y el **cupo disponible** (se rechaza una compra que lo supere, también bajo concurrencia).
+- [x] **A5** No se puede borrar una compra si el saldo de la tarjeta es menor a su valor (tiene abonos aplicados): 409 con instrucciones; el saldo nunca queda negativo.
+- [x] **A6** `POST`/`PUT` de tarjetas validados con `creditCardSchema`; el PUT parcial conserva los campos no enviados (incluida la moneda).
+- [x] **A7** Regla de cuotas definida y centralizada en `lib/cards.ts`: **una cuota por mes calendario desde el mes de la compra**, hasta completar `installments`; ya no se usa `paidInstallments`. El pago mínimo sugerido nunca supera lo que se debe.
+- [x] **M10** Columna `Category.isSystem` (migración `20261015000000_category_is_system`, marca las existentes): "Pago de Deuda" y "Abono Tarjeta" no aparecen en los selectores, el admin no puede renombrarlas ni borrarlas ni crear nombres reservados. `GET /api/categorias?all=1` las incluye (historial).
+- Adicionales: **M4** (categoría validada en ingresos/gastos), **M1** parcial (`readJson` → 400 en las rutas tocadas), fechas de compras/abonos validadas como fecha real.
+- **Decisión de negocio a revisar:** una compra con tarjeta que supere el cupo disponible ahora se rechaza. Si prefieres solo advertir, es un cambio de una línea en `compras/route.ts`.
+
+### Fase 4 — Robustez de la API (PR 4)
+- [x] **M1** JSON inválido → 400 en **todas** las rutas: cada handler va envuelto en `api()` (`lib/http.ts`), que convierte cualquier error en una respuesta JSON; `parseBody` valida el cuerpo con Zod.
+- [x] **M2** Validación Zod en POST/PUT de cuentas, presupuestos, metas, deudas, configuración y admin/cuentas. Fechas reales (`2026-13-45` ya no da 500). `PUT /presupuestos` ya no acepta `spent`. Esquemas de actualización de metas sin `default` (en Zod 4, `.partial()` aplica los defaults y reiniciaría `currentAmount`).
+- [x] **M3** Errores siempre como texto (login y pagos devolvían un objeto → `[object Object]`).
+- [x] **M4** Validar `categoryId` (existe y su tipo es correcto) — resuelto en la Fase 3.
+- [x] **M5** Ninguna ruta queda sin controlar: errores inesperados → JSON 500; base de datos caída → **503** (antes 500 o listas vacías); `GET /configuracion` cae al tema por defecto.
+- [x] **M6** Email normalizado (recortado y en minúsculas) en registro y login; la migración pasa a minúsculas los existentes que no colisionen.
+- [x] **M7** Registro simultáneo con el mismo correo → 409 (probado con 6 peticiones a la vez: 1 creado, 5 conflictos).
+- [x] **M8** Se puede editar una deuda a saldo 0 (crear con 0 sigue rechazado); la página la muestra como "Pagada", sin botón de pago y al final de la lista; el pago mínimo del resumen solo suma las activas.
+- [x] **M9** 404 correcto y tipos validados en las rutas de admin (`PUT/DELETE` de cuentas, categorías y usuarios inexistentes).
+- [x] **S2** `User.tokenVersion` (migración `20261016000000_user_token_version`): cambiar la contraseña o restablecer el admin cierra las demás sesiones (este dispositivo recibe un token nuevo); un usuario eliminado queda sin acceso; una caída de la BD da 503 y **no** desloguea. Los tokens anteriores sin `tv` siguen valiendo hasta el primer cambio de contraseña.
+- **Hallazgo durante las pruebas:** `DELETE /ingresos/[id]` y las ediciones simultáneas de ingresos/gastos descontaban el saldo varias veces (4 borrados simultáneos → saldo −199.877 en vez de −49.877). Corregido con `SELECT … FOR UPDATE` dentro de la transacción (`lib/rowLocks.ts`).
+
+### Fase 5 — Lógica financiera (PR 5)
+- [x] **F1** Patrimonio con **todas** las cuentas (ocultar una cuenta ya no lo baja; solo afecta al "Saldo disponible").
+- [x] **F2** Salud financiera con el **promedio de los últimos 3 meses completos** con datos (o el mes actual si aún no hay historial). Las tarjetas del dashboard siguen mostrando el mes actual. *Decisión del usuario.*
+- [x] **F3/F4** Tasa E.A. → mensual `(1+EA)^(1/12) − 1` en la calculadora de deudas, cuota de préstamo y meta de ahorro; la tasa 0 % ya calcula (`lib/finance-math.ts`, probado contra simulación mes a mes).
+- [x] **F5** Interés compuesto con aportes: se simula con el factor de crecimiento mensual (antes el aporte se capitalizaba por periodo y con capitalización anual/semestral/trimestral los intereses salían **negativos**). Admite capital 0 y tasa 0 %. Además se corrigió la **meta de ahorro**, que ignoraba que lo ya ahorrado también rinde.
+- [x] **F6** `Budget.categoryId` (migración `20261017000000_budget_category`, vincula los existentes por nombre). El gasto del mes lo calcula el servidor (gastos + compras con tarjeta de esa categoría); sin categoría o sin gastos = 0 (ya no se usa el `spent` guardado). Una categoría por presupuesto; el admin no puede borrar categorías con presupuestos.
+- [x] **F7** *(decisión del usuario)* **Una compra con tarjeta es gasto en su fecha y categoría; el abono no suma** (solo mueve plata de la cuenta a la deuda). Aplica a dashboard, flujo de caja, historial (lista, totales, gráficas), presupuestos y `/gastos` (compras como filas de solo lectura, abonos marcados "no suma como gasto"). Los pagos de deuda siguen contando como gasto.
+- [x] **F8/F9** `dueDay` 29-31 al último día del mes (Fase 2); **una sola alerta por vencimiento** (el tipo lleva la fecha); alerta de **deuda vencida**; `Setting.notifications` se respeta y ahora hay un interruptor en Configuración.
+- [x] **A8** `GET /api/admin/conciliacion[?userId=]` (solo lectura): por cuenta, saldo vs. suma de movimientos y el `adjustment` que ningún movimiento explica. **No corrige automáticamente**: la app no guarda saldo inicial, así que recalcular borraría ajustes manuales legítimos.
+- Adicional: el contador de `/gastos` decía "transacciónes".
+
+### Fase 6 — Infraestructura y base de datos (PR 6)
+- [x] **S3** HSTS sin `preload` y con `max-age=300` mientras el certificado sea autofirmado (instrucciones en el propio `app.conf` para subirlo con Let's Encrypt). Emitir el certificado real es un paso manual del servidor.
+- [x] **I1** Backup antes del deploy (ya en `deploy.sh`) + CI (`.github/workflows/ci.yml`: tipos, lint, unitarias, migraciones, build, e2e).
+- [x] **I2** `restore.sh` detiene la app, hace backup previo, restaura en una BD temporal, la valida y solo entonces la intercambia.
+- [x] **I3** Límite de `/api/` subido a 120 req/min (ráfaga 40); la pantalla principal hace varias llamadas a la vez.
+- [x] **I4** Migración `20261018000000_indexes_and_payment_links`: índices, FKs `SET NULL` (limpia huérfanos antes), `currency` COP y unique en `RegistrationKey.code`.
+- [x] **I5** Decisión documentada en `docs/DECISIONES.md`: se mantiene `Float` (COP sin centavos); migración a `Decimal` queda como trabajo aparte.
+- [x] **I6** Prisma 6.19, ESLint 9 con flat config, scripts `typecheck`, `lint`, `test:*`; 0 avisos de lint.
+- [x] **M11** Seed idempotente o deshabilitado en producción — resuelto en la Fase 1 (`/api/seed` eliminado).
+
+### Fase 7 — UX y pulido (PR 7)
+- [x] **B1** try/catch y aviso de error en las acciones de alertas.
+- [x] **B2** `AbortController` en historial; errores visibles con «Reintentar».
+- [x] **B3** CSV con `;`, `
+` y escape de fórmulas.
+- [x] **B4** `public/manifest.json` + `icon.svg`.
+- [x] **B5** `/calculadoras` en sidebar y barra inferior.
+- [x] **B6** Botón demo solo fuera de producción; el demo devuelve `isAdmin: false`.
+- [x] **B7** Colores del dashboard, presupuestos, historial y gráfico de flujo pasados a tokens del tema (con variante oscura).
+- [x] **B8** `ThemeProvider` recarga o reinicia el tema al iniciar o cerrar sesión.
+- [x] **B9** «Ingresa un número válido» en todos los `z.number()`.
+- [x] **B10** `crypto.randomInt` en `generateKey`.
+- [x] **B11** CSP en `next.config.mjs`, sin `X-XSS-Protection`; `SEED_KEY` por header `x-setup-key` (ya no se acepta en la URL).
+- [x] **B12** `CONTEXT.md` actualizado, sin secretos.
+
+### Recomendación transversal — Tests
+No existe ninguna prueba automatizada. Priorizar tests de integración (Vitest + BD de prueba) para los flujos de dinero: crear, editar y eliminar ingresos y gastos; pagos y abonos (incluyendo dos peticiones concurrentes); eliminar deudas y tarjetas en modo "cerrar" y "eliminar". Esos flujos concentran la mayoría de los bugs de este informe.

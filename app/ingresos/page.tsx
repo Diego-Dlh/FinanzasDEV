@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, TrendingUp, Pencil, Search } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { currentMonthISO, fmtDate, toDateInput, todayISO } from '@/lib/dates';
 import { incomeSchema, type IncomeInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -45,7 +46,7 @@ export default function IncomesPage() {
   const [editTarget, setEditTarget] = useState<Income | null>(null);
   const [error, setError] = useState('');
 
-  const currentMonth = new Date().toISOString().substring(0, 7);
+  const currentMonth = currentMonthISO();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [search, setSearch] = useState('');
 
@@ -103,7 +104,7 @@ export default function IncomesPage() {
 
   function openAdd() {
     setEditTarget(null);
-    reset({ date: new Date().toISOString().split('T')[0], frequency: 'MONTHLY' });
+    reset({ date: todayISO(), frequency: 'MONTHLY' });
     setShowModal(true);
   }
 
@@ -114,7 +115,7 @@ export default function IncomesPage() {
       amount: income.amount,
       categoryId: income.category.id,
       accountId: income.account.id,
-      date: new Date(income.date).toISOString().split('T')[0],
+      date: toDateInput(income.date),
       frequency: income.frequency as IncomeInput['frequency'],
     });
     setShowModal(true);
@@ -249,7 +250,7 @@ export default function IncomesPage() {
                       {income.category.name} · {frequencyLabels[income.frequency] ?? income.frequency}
                     </p>
                     <p className="text-xs text-on-surface-variant">
-                      {new Date(income.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {fmtDate(income.date)}
                     </p>
                   </div>
                 </div>

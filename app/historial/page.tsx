@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Wallet, Search, History, Download } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { addDaysISO, addMonthsISO, dateOnlyToUTC, fmtDate, todayISO } from '@/lib/dates';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
 import { PageSpinner } from '@/components/ui/spinner';
@@ -42,26 +43,22 @@ const PERIODS = [
 ];
 type Period = typeof PERIODS[number]['key'];
 
+// Calendar ranges ('YYYY-MM-DD', `to` inclusive) based on today in Colombia
 function periodToRange(p: Period): { from: string; to: string } {
-  const now = new Date();
-  const pad = (d: Date) => d.toISOString().split('T')[0];
-  if (p === 'month') {
-    return { from: pad(new Date(now.getFullYear(), now.getMonth(), 1)), to: pad(now) };
-  }
+  const today = todayISO();
+  const month = today.slice(0, 7);
+  const monthsAgo = (n: number) => {
+    const d = dateOnlyToUTC(today);
+    d.setUTCMonth(d.getUTCMonth() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  if (p === 'month') return { from: `${month}-01`, to: today };
   if (p === 'last-month') {
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end   = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { from: pad(start), to: pad(end) };
+    return { from: `${addMonthsISO(month, -1)}-01`, to: addDaysISO(`${month}-01`, -1) };
   }
-  if (p === '3m') {
-    const d = new Date(now); d.setMonth(d.getMonth() - 3);
-    return { from: pad(d), to: pad(now) };
-  }
-  if (p === '6m') {
-    const d = new Date(now); d.setMonth(d.getMonth() - 6);
-    return { from: pad(d), to: pad(now) };
-  }
-  return { from: pad(new Date(now.getFullYear(), 0, 1)), to: pad(now) };
+  if (p === '3m') return { from: monthsAgo(3), to: today };
+  if (p === '6m') return { from: monthsAgo(6), to: today };
+  return { from: `${today.slice(0, 4)}-01-01`, to: today };
 }
 
 function fmtMonth(key: string) {
@@ -79,7 +76,8 @@ function fmtShort(n: number) {
   return `$${n.toFixed(0)}`;
 }
 
-const PIE_COLORS = ['#2563eb','#16a34a','#dc2626','#ca8a04','#7c3aed','#0891b2','#be185d','#ea580c','#065f46','#92400e'];
+// Theme-aware: the palette lives in globals.css so it adapts to dark mode
+const PIE_COLORS = Array.from({ length: 10 }, (_, i) => `var(--chart-${i + 1})`);
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function HistorialPage() {
@@ -91,48 +89,66 @@ export default function HistorialPage() {
   const [data, setData]         = useState<HistorialData | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+
+  // Only the latest request may update the screen: a slow, older response must not overwrite a newer one
+  const abortRef = useRef<AbortController | null>(null);
 
   async function loadData() {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
+    setError('');
     try {
       const { from, to } = periodToRange(period);
       const qs = new URLSearchParams({ from, to, type, ...(catId ? { categoryId: catId } : {}) });
       const [histRes, catRes] = await Promise.all([
-        api.get<HistorialData>(`/historial?${qs}`),
-        categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias'),
+        api.get<HistorialData>(`/historial?${qs}`, controller.signal),
+        categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias?all=1', controller.signal),
       ]);
+      if (controller.signal.aborted) return;
       setData(histRes);
-      if (!categories.length) setCategories((catRes as { categories: Category[] }).categories);
-    } catch { /* silencioso */ }
-    finally { setLoading(false); }
+      // Card payments aren't listed (the purchase already counts), so don't offer them as a filter
+      if (!categories.length) setCategories((catRes as { categories: Category[] }).categories.filter((c) => c.name !== 'Abono Tarjeta'));
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el historial');
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }
 
   function exportCSV() {
     if (filtered.length === 0) return;
     const headers = ['Fecha', 'Tipo', 'Descripción', 'Categoría', 'Cuenta', 'Monto COP'];
     const rows = filtered.map((t) => [
-      new Date(t.date).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      fmtDate(t.date, { day: '2-digit', month: '2-digit', year: 'numeric' }),
       t.type === 'INCOME' ? 'Ingreso' : 'Gasto',
       t.label,
       t.category,
       t.account,
       String(t.amount),
     ]);
+    // ";" because Excel in Spanish locales splits columns on it; a leading = + - @ would run as a formula
+    const safe = (cell: string) => (/^[=+\-@\t\r]/.test(cell) ? `'${cell}` : cell);
     const csv = [headers, ...rows]
-      .map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+      .map((r) => r.map((cell) => `"${safe(cell).replace(/"/g, '""')}"`).join(';'))
+      .join('\r\n');
     // BOM UTF-8 para que Excel abra con tildes correctas
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = todayISO();
     const periodLabel = PERIODS.find((p) => p.key === period)?.label.toLowerCase().replace(' ', '-') ?? period;
     a.download = `lumina-historial-${periodLabel}-${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
+  // Reload when a filter changes; the category list is only fetched the first time
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user) loadData(); }, [user, period, type, catId]);
 
   const filtered = useMemo(() => {
@@ -207,6 +223,13 @@ export default function HistorialPage() {
           </select>
         </div>
 
+        {error && (
+          <div role="alert" className="rounded-2xl bg-error/10 text-error text-sm px-4 py-3 flex items-center justify-between gap-3">
+            <span>{error}</span>
+            <button onClick={() => loadData()} className="font-semibold underline shrink-0">Reintentar</button>
+          </div>
+        )}
+
         {/* ── Summary cards ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-4">
           <SummaryCard
@@ -255,8 +278,8 @@ export default function HistorialPage() {
                         contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 16px 40px rgba(0,0,0,0.12)' }}
                         formatter={(v, name) => [fmt(Number(v)), name === 'income' ? 'Ingresos' : 'Gastos']}
                       />
-                      <Bar dataKey="income"  name="income"  fill="#006e2a" radius={[8, 8, 0, 0]} barSize={16} />
-                      <Bar dataKey="expense" name="expense" fill="#ba1a1a" radius={[8, 8, 0, 0]} barSize={16} />
+                      <Bar dataKey="income"  name="income"  fill="var(--color-secondary)" radius={[8, 8, 0, 0]} barSize={16} />
+                      <Bar dataKey="expense" name="expense" fill="var(--color-error)" radius={[8, 8, 0, 0]} barSize={16} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -378,8 +401,7 @@ function SummaryCard({
 
 function TransactionRow({ t }: { t: Transaction }) {
   const isIncome = t.type === 'INCOME';
-  const date = new Date(t.date);
-  const dateStr = date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+  const dateStr = fmtDate(t.date);
 
   return (
     <div className="glass-card rounded-[20px] px-4 py-3.5 shadow-card flex items-center gap-3">

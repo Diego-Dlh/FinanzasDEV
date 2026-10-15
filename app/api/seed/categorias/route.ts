@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
+import { api } from '@/lib/http';
+import { hasValidSetupKey } from '@/lib/adminAuth';
 
-const ALL_CATEGORIES = [
+const USER_CATEGORIES = [
   { name: 'Salario',              type: 'INCOME'  as const },
   { name: 'Freelance',            type: 'INCOME'  as const },
   { name: 'Inversiones',          type: 'INCOME'  as const },
@@ -20,34 +23,31 @@ const ALL_CATEGORIES = [
   { name: 'Mascotas',             type: 'EXPENSE' as const },
 ];
 
-export async function GET(req: NextRequest) {
-  const key = req.nextUrl.searchParams.get('key');
-  if (!process.env.SEED_KEY || key !== process.env.SEED_KEY) {
+const ALL_CATEGORIES = [
+  ...USER_CATEGORIES.map((c) => ({ ...c, isSystem: false })),
+  ...SYSTEM_CATEGORY_LIST.map((c) => ({ ...c, isSystem: true })),
+];
+
+async function handleGet(req: NextRequest) {
+  if (!hasValidSetupKey(req)) {
     return NextResponse.json({ error: 'Clave incorrecta o no configurada' }, { status: 401 });
   }
 
-  try {
-    const results = await Promise.all(
-      ALL_CATEGORIES.map((c) =>
-        prisma.category.upsert({
-          where: { name: c.name },
-          update: {},
-          create: c,
-        })
-      )
-    );
+  const results = await Promise.all(
+    ALL_CATEGORIES.map((c) =>
+      prisma.category.upsert({
+        where: { name: c.name },
+        update: c.isSystem ? { isSystem: true } : {},
+        create: c,
+      })
+    )
+  );
 
-    const created = results.filter((r) => {
-      const orig = ALL_CATEGORIES.find((c) => c.name === r.name);
-      return orig !== undefined;
-    });
-
-    return NextResponse.json({
-      ok: true,
-      message: `Categorías sincronizadas — ${results.length} total (upsert idempotente)`,
-      categorias: results.map((c) => `${c.name} (${c.type})`),
-    });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
-  }
+  return NextResponse.json({
+    ok: true,
+    message: `Categorías sincronizadas — ${results.length} total (upsert idempotente)`,
+    categorias: results.map((c) => `${c.name} (${c.type})`),
+  });
 }
+
+export const GET = api(handleGet);

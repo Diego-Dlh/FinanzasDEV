@@ -1,5 +1,6 @@
 'use client';
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { useAuth } from './useAuth';
 
 interface ThemeCtx {
   isDark: boolean;
@@ -12,23 +13,34 @@ const ThemeContext = createContext<ThemeCtx | null>(null);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isDark, setIsDark] = useState(false);
 
-  useEffect(() => {
-    // Sync state with whatever the anti-FOUC script already applied
-    const stored = localStorage.getItem('theme') === 'dark';
-    setIsDark(stored);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const hadUser = useRef(false);
 
-    // Async: pull preference from DB if user is logged in
+  // Anti-FOUC script already applied the stored theme; keep the state in step with it
+  useEffect(() => {
+    setIsDark(localStorage.getItem('theme') === 'dark');
+  }, []);
+
+  // Each time the signed-in user changes, take that person's saved preference (and reset it on logout)
+  useEffect(() => {
+    if (!userId) {
+      if (hadUser.current) applyDark(false);
+      hadUser.current = false;
+      return;
+    }
+    hadUser.current = true;
     const token = localStorage.getItem('auth_token');
     if (!token) return;
+    let cancelled = false;
     fetch('/api/configuracion', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((data) => {
-        if (data.setting?.darkMode !== undefined) {
-          applyDark(data.setting.darkMode);
-        }
+        if (!cancelled && typeof data.setting?.darkMode === 'boolean') applyDark(data.setting.darkMode);
       })
       .catch(() => {});
-  }, []);
+    return () => { cancelled = true; };
+  }, [userId]);
 
   function applyDark(value: boolean) {
     setIsDark(value);

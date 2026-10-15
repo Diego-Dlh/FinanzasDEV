@@ -33,8 +33,9 @@ interface Category {
   id: string;
   name: string;
   type: 'INCOME' | 'EXPENSE';
+  isSystem: boolean;
   createdAt: string;
-  _count: { incomes: number; expenses: number; cardPurchases: number };
+  _count: { incomes: number; expenses: number; cardPurchases: number; budgets: number };
 }
 
 type AccountType = 'CASH' | 'BANK' | 'NEQUI' | 'DAVIPLATA' | 'CARD';
@@ -67,7 +68,13 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   Object.assign(headers, opts?.headers ?? {});
 
   const res = await fetch(`/api${path}`, { ...opts, headers });
-  const json = await res.json();
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    window.location.replace('/auth/login');
+    throw new Error('Tu sesión expiró. Inicia sesión de nuevo.');
+  }
   if (!res.ok) throw new Error(json.error ?? 'Error');
   return json as T;
 }
@@ -221,7 +228,7 @@ export default function AdminPage() {
   }
 
   async function deleteCategory(cat: Category) {
-    const total = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases;
+    const total = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases + cat._count.budgets;
     if (total > 0) {
       setCatError(`"${cat.name}" está en uso en ${total} registro(s) y no se puede eliminar.`);
       return;
@@ -444,7 +451,7 @@ export default function AdminPage() {
               </p>
             )}
             {filteredCats.map((cat) => {
-              const usage = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases;
+              const usage = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases + cat._count.budgets;
               const isEditing = catEditId === cat.id;
               return (
                 <div key={cat.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-surface-container-high">
@@ -468,14 +475,22 @@ export default function AdminPage() {
                           {usage} uso{usage !== 1 ? 's' : ''}
                         </span>
                       )}
-                      <button onClick={() => { setCatEditId(cat.id); setCatEditName(cat.name); setCatError(''); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition"><Pencil size={13} /></button>
-                      <button
-                        onClick={() => deleteCategory(cat)}
-                        className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${usage > 0 ? 'text-on-surface-variant/40 cursor-not-allowed' : 'text-on-surface-variant hover:bg-error-container hover:text-error'}`}
-                        title={usage > 0 ? 'En uso, no se puede eliminar' : 'Eliminar'}
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {cat.isSystem ? (
+                        <span className="text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full" title="La usa la app para registrar pagos; no se puede editar ni eliminar">
+                          Sistema
+                        </span>
+                      ) : (
+                        <>
+                          <button onClick={() => { setCatEditId(cat.id); setCatEditName(cat.name); setCatError(''); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition"><Pencil size={13} /></button>
+                          <button
+                            onClick={() => deleteCategory(cat)}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${usage > 0 ? 'text-on-surface-variant/40 cursor-not-allowed' : 'text-on-surface-variant hover:bg-error-container hover:text-error'}`}
+                            title={usage > 0 ? 'En uso, no se puede eliminar' : 'Eliminar'}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

@@ -102,7 +102,7 @@ User, Account, Category (global), Income, Expense, Debt, Payment, Budget, Goal, 
 - [ ] **S2**: **Sin rate limiting** en ningún endpoint. Login puede sufrir fuerza bruta sin restricción. **REVISAR CON HUMANO** — requiere middleware (Upstash Rate Limit, Nginx config, etc.).
 - [ ] **S3**: JWT en `localStorage` — vulnerable a XSS. Alternativa: httpOnly cookie. **REVISAR CON HUMANO** — cambio de arquitectura significativo.
 - [x] **S4**: `app/auth/login/page.tsx` formulario usa `bg-white` hardcodeado — bug cosmético pero indica que el form no fue testeado en dark mode.
-- [ ] **S5**: `ADMIN_PASSWORD` fallback `'Dlh2026'` hardcodeado en `admin/setup/route.ts`. El código ya está en el repositorio. **REVISAR CON HUMANO** — las credenciales de producción deben estar siempre en variables de entorno; el fallback hardcodeado es riesgo si alguien usa la app con variables por defecto.
+- [ ] **S5**: `ADMIN_PASSWORD` fallback hardcodeado en `admin/setup/route.ts`. El código ya está en el repositorio. **REVISAR CON HUMANO** — las credenciales de producción deben estar siempre en variables de entorno; el fallback hardcodeado es riesgo si alguien usa la app con variables por defecto.
 - [ ] **S6**: `/api/seed` y `/api/seed/categorias` solo protegidos por `SEED_KEY` en query param — exponer a internet sin más protección es riesgo menor pero aceptable si la clave es fuerte. **REVISAR CON HUMANO**.
 
 ### LÓGICA FALTANTE
@@ -213,7 +213,7 @@ La app tiene una arquitectura sólida y un diseño de calidad. Sin embargo, en e
 |------|-------|
 | **Rate limiting en login/register** | Requiere decisión de infraestructura: Upstash, Nginx, middleware propio. No implementar sin coordinar con el dueño del VPS. |
 | **JWT → httpOnly cookie** | Cambio de arquitectura significativo. Afecta toda la capa de auth, el demo mode y las llamadas API del cliente. |
-| **Password admin default 'Dlh2026'** | Está en código fuente. No tocamos credenciales; el usuario debe setear `ADMIN_PASSWORD` en `.env` antes de producción. |
+| **Password admin default hardcodeado** | Está en código fuente. No tocamos credenciales; el usuario debe setear `ADMIN_PASSWORD` en `.env` antes de producción. |
 | **Ajuste de balance para datos históricos** | Los ingresos/gastos creados antes de esta auditoría no afectaron el balance. La corrección de datos existentes requiere una migración coordinada con el usuario. |
 | **`paidInstallments` en CardPurchase** | La lógica de cuotas pagadas implica decisiones de negocio no especificadas (¿se incrementa por abono parcial? ¿proporcional?). |
 | **Paginación de listas** | App personal con pocos usuarios; no urgente. Anotar para cuando supere 500+ registros por usuario. |
