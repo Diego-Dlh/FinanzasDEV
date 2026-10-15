@@ -96,7 +96,7 @@ export default function HistorialPage() {
       const qs = new URLSearchParams({ from, to, type, ...(catId ? { categoryId: catId } : {}) });
       const [histRes, catRes] = await Promise.all([
         api.get<HistorialData>(`/historial?${qs}`),
-        categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias'),
+        categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias?all=1'),
       ]);
       setData(histRes);
       if (!categories.length) setCategories((catRes as { categories: Category[] }).categories);

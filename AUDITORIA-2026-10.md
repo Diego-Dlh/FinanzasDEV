@@ -243,20 +243,22 @@
 - Nota: los gastos de pagos de deuda creados **antes** de este cambio guardaron la hora real; los hechos entre 19:00 y 24:00 (hora Colombia) se ven un día después. En el homelab (BD nueva) no aplica.
 
 ### Fase 3 — Integridad de saldos (PR 3)
-- [ ] **A1** Pagos y abonos atómicos (validación dentro de la transacción + `increment`/`decrement`); deshabilitar el botón al enviar.
-- [ ] **A2** Quitar el recorte `Math.min(creditLimit, …)` al restaurar abonos.
-- [ ] **A3** Bloquear la edición de gastos vinculados a pagos o abonos.
-- [ ] **A4** Validar `POST compras` con `cardPurchaseSchema` y la categoría.
-- [ ] **A5** Evitar `usedBalance` negativo al borrar compras.
-- [ ] **A6** Validar `POST`/`PUT` de tarjetas con `creditCardSchema`.
-- [ ] **A7** Limitar el pago mínimo sugerido a `usedBalance` y definir la regla de `paidInstallments`.
-- [ ] **M10** Marcar las categorías de sistema y ocultarlas en los selectores.
+- [x] **A1** Pagos y abonos atómicos: `UPDATE … WHERE saldo >= monto` dentro de la transacción (cuenta, deuda y tarjeta). También la eliminación de pagos, abonos y gastos vinculados revierte **una sola vez** (borrar primero, con comprobación de `count`). Los botones ya se desactivaban mientras se envía.
+- [x] **A2** Quitar el recorte `Math.min(creditLimit, …)` al restaurar abonos (en `abonos/[paymentId]` y en `gastos/[id]`).
+- [x] **A3** Bloquear la edición de gastos vinculados a pagos o abonos (409 en la API; la página oculta el lápiz y avisa qué pasa al eliminarlos). `GET /api/gastos` devuelve `linked`.
+- [x] **A4** `POST compras` valida con `cardPurchaseSchema`, la categoría (existe, es de gasto, no es de sistema) y el **cupo disponible** (se rechaza una compra que lo supere, también bajo concurrencia).
+- [x] **A5** No se puede borrar una compra si el saldo de la tarjeta es menor a su valor (tiene abonos aplicados): 409 con instrucciones; el saldo nunca queda negativo.
+- [x] **A6** `POST`/`PUT` de tarjetas validados con `creditCardSchema`; el PUT parcial conserva los campos no enviados (incluida la moneda).
+- [x] **A7** Regla de cuotas definida y centralizada en `lib/cards.ts`: **una cuota por mes calendario desde el mes de la compra**, hasta completar `installments`; ya no se usa `paidInstallments`. El pago mínimo sugerido nunca supera lo que se debe.
+- [x] **M10** Columna `Category.isSystem` (migración `20261015000000_category_is_system`, marca las existentes): "Pago de Deuda" y "Abono Tarjeta" no aparecen en los selectores, el admin no puede renombrarlas ni borrarlas ni crear nombres reservados. `GET /api/categorias?all=1` las incluye (historial).
+- Adicionales: **M4** (categoría validada en ingresos/gastos), **M1** parcial (`readJson` → 400 en las rutas tocadas), fechas de compras/abonos validadas como fecha real.
+- **Decisión de negocio a revisar:** una compra con tarjeta que supere el cupo disponible ahora se rechaza. Si prefieres solo advertir, es un cambio de una línea en `compras/route.ts`.
 
 ### Fase 4 — Robustez de la API (PR 4)
-- [ ] **M1** Helper `parseBody` para JSON inválido → 400.
+- [ ] **M1** Helper `parseBody` para JSON inválido → 400. *(`readJson` en `lib/http.ts` ya existe y se usa en las rutas de la Fase 3; falta aplicarlo al resto.)*
 - [ ] **M2** Validación Zod en los PUT de presupuestos, metas, cuentas y admin/cuentas.
 - [ ] **M3** Formato de error uniforme (`string`).
-- [ ] **M4** Validar `categoryId` (existe y su tipo es correcto).
+- [x] **M4** Validar `categoryId` (existe y su tipo es correcto) — resuelto en la Fase 3.
 - [ ] **M5** try/catch en los GET restantes.
 - [ ] **M6** Normalizar el email.
 - [ ] **M7** Capturar `P2002` en el registro.
@@ -282,7 +284,7 @@
 - [ ] **I4** Migración: índices, FKs, `currency` COP, unique en `RegistrationKey.code`.
 - [ ] **I5** (planificar) Montos en `Decimal`/enteros.
 - [ ] **I6** Actualizar Prisma y alinear ESLint; añadir el script `typecheck`.
-- [ ] **M11** Seed idempotente o deshabilitado en producción.
+- [x] **M11** Seed idempotente o deshabilitado en producción — resuelto en la Fase 1 (`/api/seed` eliminado).
 
 ### Fase 7 — UX y pulido (PR 7)
 - [ ] **B1** try/catch en las acciones de alertas.

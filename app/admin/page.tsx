@@ -33,6 +33,7 @@ interface Category {
   id: string;
   name: string;
   type: 'INCOME' | 'EXPENSE';
+  isSystem: boolean;
   createdAt: string;
   _count: { incomes: number; expenses: number; cardPurchases: number };
 }
@@ -474,14 +475,22 @@ export default function AdminPage() {
                           {usage} uso{usage !== 1 ? 's' : ''}
                         </span>
                       )}
-                      <button onClick={() => { setCatEditId(cat.id); setCatEditName(cat.name); setCatError(''); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition"><Pencil size={13} /></button>
-                      <button
-                        onClick={() => deleteCategory(cat)}
-                        className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${usage > 0 ? 'text-on-surface-variant/40 cursor-not-allowed' : 'text-on-surface-variant hover:bg-error-container hover:text-error'}`}
-                        title={usage > 0 ? 'En uso, no se puede eliminar' : 'Eliminar'}
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {cat.isSystem ? (
+                        <span className="text-[11px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full" title="La usa la app para registrar pagos; no se puede editar ni eliminar">
+                          Sistema
+                        </span>
+                      ) : (
+                        <>
+                          <button onClick={() => { setCatEditId(cat.id); setCatEditName(cat.name); setCatError(''); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition"><Pencil size={13} /></button>
+                          <button
+                            onClick={() => deleteCategory(cat)}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition ${usage > 0 ? 'text-on-surface-variant/40 cursor-not-allowed' : 'text-on-surface-variant hover:bg-error-container hover:text-error'}`}
+                            title={usage > 0 ? 'En uso, no se puede eliminar' : 'Eliminar'}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

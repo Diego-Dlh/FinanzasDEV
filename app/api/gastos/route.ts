@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { expenseSchema } from '@/lib/validators';
+import { errorResponse, readJson } from '@/lib/http';
+import { validateCategory } from '@/lib/categories';
+import { findLinkedExpenseIds } from '@/lib/expenseLinks';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -14,7 +17,9 @@ export async function GET(request: Request) {
       orderBy: { date: 'desc' },
       include: { category: true, account: true },
     });
-    return NextResponse.json({ expenses });
+    // `linked`: created by a debt/card payment, so it can't be edited on its own
+    const linked = await findLinkedExpenseIds(expenses.map((e) => e.id));
+    return NextResponse.json({ expenses: expenses.map((e) => ({ ...e, linked: linked.has(e.id) })) });
   } catch {
     return NextResponse.json({ expenses: [] });
   }
@@ -25,26 +30,30 @@ export async function POST(request: Request) {
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const body = await request.json();
-  const parse = expenseSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+  try {
+    const parse = expenseSchema.safeParse(await readJson(request));
+    if (!parse.success) {
+      return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+    }
+
+    const { description, amount, categoryId, accountId, date, frequency } = parse.data;
+
+    const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+    await validateCategory(categoryId, 'EXPENSE');
+
+    const result = await prisma.$transaction([
+      prisma.expense.create({
+        data: { userId, accountId, categoryId, description, amount, date: new Date(date), frequency },
+      }),
+      prisma.account.update({
+        where: { id: accountId },
+        data: { balance: { decrement: amount } },
+      }),
+    ]);
+
+    return NextResponse.json({ expense: result[0] }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  const { description, amount, categoryId, accountId, date, frequency } = parse.data;
-
-  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
-  if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-
-  const result = await prisma.$transaction([
-    prisma.expense.create({
-      data: { userId, accountId, categoryId, description, amount, date: new Date(date), frequency },
-    }),
-    prisma.account.update({
-      where: { id: accountId },
-      data: { balance: { decrement: amount } },
-    }),
-  ]);
-
-  return NextResponse.json({ expense: result[0] }, { status: 201 });
 }

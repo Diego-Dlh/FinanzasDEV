@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { cardPaymentSchema } from '@/lib/validators';
+import { dateOnlyToUTC } from '@/lib/dates';
+import { HttpError, errorResponse, formatCOP, readJson } from '@/lib/http';
+import { systemCategoryId } from '@/lib/categories';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -29,76 +32,77 @@ export async function POST(request: Request, { params }: Params) {
   const card = await prisma.creditCard.findFirst({ where: { id: cardId, userId } });
   if (!card) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  const body = await request.json();
-  const parse = cardPaymentSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
-  }
-
-  const { amount, note, paidAt, accountId } = parse.data;
-
-  if (amount > card.usedBalance) {
-    return NextResponse.json(
-      { error: `El abono no puede superar el saldo de la tarjeta (${card.usedBalance.toLocaleString('es-CO')} COP)` },
-      { status: 400 }
-    );
-  }
-
-  let account = null;
-  if (accountId) {
-    account = await prisma.account.findFirst({ where: { id: accountId, userId } });
-    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-    if (amount > account.balance) {
-      return NextResponse.json(
-        { error: `Saldo insuficiente en la cuenta seleccionada (${account.balance.toLocaleString('es-CO')} COP disponibles)` },
-        { status: 400 }
-      );
+  try {
+    const parse = cardPaymentSchema.safeParse(await readJson(request));
+    if (!parse.success) {
+      return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
     }
-  }
 
-  const newBalance = Math.max(0, card.usedBalance - amount);
-  const paymentDate = paidAt ? new Date(paidAt) : new Date();
+    const { amount, note, paidAt, accountId } = parse.data;
 
-  const payment = await prisma.$transaction(async (tx) => {
-    let expenseId: string | null = null;
+    // Friendly pre-checks. The guarded updates below re-check at write time,
+    // which is what protects against concurrent requests (double click).
+    if (amount > card.usedBalance) {
+      throw new HttpError(400, `El abono no puede superar el saldo de la tarjeta (${formatCOP(card.usedBalance)})`);
+    }
 
-    if (account && accountId) {
-      const cat = await tx.category.upsert({
-        where: { name: 'Abono Tarjeta' },
-        create: { name: 'Abono Tarjeta', type: 'EXPENSE' },
-        update: {},
+    if (accountId) {
+      const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+      if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+      if (amount > account.balance) {
+        throw new HttpError(400, `Saldo insuficiente en la cuenta seleccionada (${formatCOP(account.balance)} disponibles)`);
+      }
+    }
+
+    const paymentDate = dateOnlyToUTC(paidAt);
+
+    const payment = await prisma.$transaction(async (tx) => {
+      const cardUpdate = await tx.creditCard.updateMany({
+        where: { id: cardId, userId, usedBalance: { gte: amount } },
+        data: { usedBalance: { decrement: amount } },
       });
-      const expense = await tx.expense.create({
+      if (cardUpdate.count !== 1) {
+        throw new HttpError(400, 'El abono supera el saldo actual de la tarjeta. Actualiza la página e intenta de nuevo.');
+      }
+
+      let expenseId: string | null = null;
+      if (accountId) {
+        const accountUpdate = await tx.account.updateMany({
+          where: { id: accountId, userId, balance: { gte: amount } },
+          data: { balance: { decrement: amount } },
+        });
+        if (accountUpdate.count !== 1) {
+          throw new HttpError(400, 'Saldo insuficiente en la cuenta seleccionada');
+        }
+        const expense = await tx.expense.create({
+          data: {
+            userId,
+            accountId,
+            categoryId: await systemCategoryId(tx, 'cardPayment'),
+            description: `Abono: ${card.name} (${card.bank})`,
+            amount,
+            date: paymentDate,
+            frequency: 'ONE_TIME',
+          },
+        });
+        expenseId = expense.id;
+      }
+
+      return tx.cardPayment.create({
         data: {
           userId,
-          accountId,
-          categoryId: cat.id,
-          description: `Abono: ${card.name} (${card.bank})`,
+          cardId,
           amount,
-          date: paymentDate,
-          frequency: 'ONE_TIME',
+          note: note ?? null,
+          paidAt: paymentDate,
+          accountId: accountId ?? null,
+          expenseId,
         },
       });
-      expenseId = expense.id;
-      await tx.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
-    }
-
-    const payment = await tx.cardPayment.create({
-      data: {
-        userId,
-        cardId,
-        amount,
-        note: note ?? null,
-        paidAt: paymentDate,
-        accountId: accountId ?? null,
-        expenseId,
-      },
     });
 
-    await tx.creditCard.update({ where: { id: cardId }, data: { usedBalance: newBalance } });
-
-    return payment;
-  });
-
-  return NextResponse.json({ payment }, { status: 201 });
+    return NextResponse.json({ payment }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }

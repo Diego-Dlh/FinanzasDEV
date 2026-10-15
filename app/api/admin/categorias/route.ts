@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
+import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
 
 export async function GET(request: Request) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
   if (type !== 'INCOME' && type !== 'EXPENSE') {
     return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 });
   }
+
+  const reserved = SYSTEM_CATEGORY_LIST.some((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+  if (reserved) return NextResponse.json({ error: 'Ese nombre está reservado por el sistema' }, { status: 409 });
 
   const existing = await prisma.category.findUnique({ where: { name: name.trim() } });
   if (existing) return NextResponse.json({ error: 'Ya existe una categoría con ese nombre' }, { status: 409 });

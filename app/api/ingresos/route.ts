@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { incomeSchema } from '@/lib/validators';
+import { errorResponse, readJson } from '@/lib/http';
+import { validateCategory } from '@/lib/categories';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -25,26 +27,30 @@ export async function POST(request: Request) {
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const body = await request.json();
-  const parse = incomeSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+  try {
+    const parse = incomeSchema.safeParse(await readJson(request));
+    if (!parse.success) {
+      return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+    }
+
+    const { name, amount, categoryId, accountId, date, frequency } = parse.data;
+
+    const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+    await validateCategory(categoryId, 'INCOME');
+
+    const income = await prisma.$transaction([
+      prisma.income.create({
+        data: { userId, accountId, categoryId, name, amount, date: new Date(date), frequency },
+      }),
+      prisma.account.update({
+        where: { id: accountId },
+        data: { balance: { increment: amount } },
+      }),
+    ]);
+
+    return NextResponse.json({ income: income[0] }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  const { name, amount, categoryId, accountId, date, frequency } = parse.data;
-
-  const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
-  if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-
-  const income = await prisma.$transaction([
-    prisma.income.create({
-      data: { userId, accountId, categoryId, name, amount, date: new Date(date), frequency },
-    }),
-    prisma.account.update({
-      where: { id: accountId },
-      data: { balance: { increment: amount } },
-    }),
-  ]);
-
-  return NextResponse.json({ income: income[0] }, { status: 201 });
 }

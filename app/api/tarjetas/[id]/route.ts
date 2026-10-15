@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { creditCardSchema } from '@/lib/validators';
+import { errorResponse, readJson } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -33,21 +35,33 @@ export async function PUT(request: Request, { params }: Params) {
   const existing = await prisma.creditCard.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  const body = await request.json();
-  const card = await prisma.creditCard.update({
-    where: { id },
-    data: {
-      name:         body.name         ?? existing.name,
-      bank:         body.bank         ?? existing.bank,
-      creditLimit:  body.creditLimit  !== undefined ? Number(body.creditLimit)  : existing.creditLimit,
-      interestRate: body.interestRate !== undefined ? Number(body.interestRate) : existing.interestRate,
-      dueDay:       body.dueDay       !== undefined ? Number(body.dueDay)       : existing.dueDay,
-      cutDay:       body.cutDay       !== undefined ? Number(body.cutDay)       : existing.cutDay,
-      currency:     body.currency     ?? existing.currency,
-    },
-  });
+  try {
+    const body = await readJson(request);
+    const parse = creditCardSchema.partial().safeParse(body);
+    if (!parse.success) {
+      return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+    }
+    const data = parse.data;
+    // The schema's default for `currency` must not overwrite it when the field wasn't sent
+    const sentCurrency = typeof body === 'object' && body !== null && 'currency' in body;
 
-  return NextResponse.json({ card });
+    const card = await prisma.creditCard.update({
+      where: { id },
+      data: {
+        name:         data.name         ?? existing.name,
+        bank:         data.bank         ?? existing.bank,
+        creditLimit:  data.creditLimit  ?? existing.creditLimit,
+        interestRate: data.interestRate ?? existing.interestRate,
+        dueDay:       data.dueDay       ?? existing.dueDay,
+        cutDay:       data.cutDay       ?? existing.cutDay,
+        currency:     sentCurrency ? (data.currency ?? existing.currency) : existing.currency,
+      },
+    });
+
+    return NextResponse.json({ card });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 export async function DELETE(request: Request, { params }: Params) {

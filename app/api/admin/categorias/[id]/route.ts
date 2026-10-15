@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
+import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -11,6 +12,16 @@ export async function PUT(request: Request, { params }: Params) {
   const { id } = await params;
   const { name } = await request.json();
   if (!name?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 });
+
+  const current = await prisma.category.findUnique({ where: { id } });
+  if (!current) return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 });
+  if (current.isSystem) {
+    return NextResponse.json({ error: 'Es una categoría del sistema y no se puede renombrar' }, { status: 409 });
+  }
+
+  if (SYSTEM_CATEGORY_LIST.some((c) => c.name.toLowerCase() === name.trim().toLowerCase())) {
+    return NextResponse.json({ error: 'Ese nombre está reservado por el sistema' }, { status: 409 });
+  }
 
   const existing = await prisma.category.findFirst({
     where: { name: name.trim(), NOT: { id } },
@@ -37,6 +48,9 @@ export async function DELETE(request: Request, { params }: Params) {
     include: { _count: { select: { incomes: true, expenses: true, cardPurchases: true } } },
   });
   if (!category) return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 });
+  if (category.isSystem) {
+    return NextResponse.json({ error: 'Es una categoría del sistema y no se puede eliminar' }, { status: 409 });
+  }
 
   const totalUsage = category._count.incomes + category._count.expenses + category._count.cardPurchases;
   if (totalUsage > 0) {

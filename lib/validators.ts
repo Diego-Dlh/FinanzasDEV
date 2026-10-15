@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import { dateOnlyToUTC } from './dates';
+
+// 'YYYY-MM-DD' that is a real calendar day (rejects 2026-02-31, 'abc', '')
+const calendarDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
+  .refine((s) => {
+    const d = dateOnlyToUTC(s);
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }, 'Fecha inválida');
 
 export const registerSchema = z.object({
   name:            z.string().min(2, 'El nombre es requerido'),
@@ -75,7 +85,7 @@ export const cardPurchaseSchema = z.object({
   categoryId:   z.string().min(1, 'La categoría es requerida'),
   totalAmount:  z.number().positive('El monto debe ser positivo'),
   installments: z.number().int().min(1, 'Mínimo 1 cuota').max(48, 'Máximo 48 cuotas'),
-  date:         z.string().min(1, 'La fecha es requerida'),
+  date:         calendarDate,
 });
 
 export type RegisterInput    = z.infer<typeof registerSchema>;
@@ -89,7 +99,7 @@ export type PaymentInput     = z.infer<typeof paymentSchema>;
 export const cardPaymentSchema = z.object({
   amount:    z.number().positive('El monto debe ser positivo'),
   note:      z.string().optional(),
-  paidAt:    z.string().min(1, 'La fecha es requerida'),
+  paidAt:    calendarDate,
   accountId: z.string().optional(),
 });
 

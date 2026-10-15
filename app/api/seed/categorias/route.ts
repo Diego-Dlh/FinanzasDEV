@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
 
-const ALL_CATEGORIES = [
+const USER_CATEGORIES = [
   { name: 'Salario',              type: 'INCOME'  as const },
   { name: 'Freelance',            type: 'INCOME'  as const },
   { name: 'Inversiones',          type: 'INCOME'  as const },
@@ -20,6 +21,11 @@ const ALL_CATEGORIES = [
   { name: 'Mascotas',             type: 'EXPENSE' as const },
 ];
 
+const ALL_CATEGORIES = [
+  ...USER_CATEGORIES.map((c) => ({ ...c, isSystem: false })),
+  ...SYSTEM_CATEGORY_LIST.map((c) => ({ ...c, isSystem: true })),
+];
+
 export async function GET(req: NextRequest) {
   const key = req.nextUrl.searchParams.get('key');
   if (!process.env.SEED_KEY || key !== process.env.SEED_KEY) {
@@ -31,16 +37,11 @@ export async function GET(req: NextRequest) {
       ALL_CATEGORIES.map((c) =>
         prisma.category.upsert({
           where: { name: c.name },
-          update: {},
+          update: c.isSystem ? { isSystem: true } : {},
           create: c,
         })
       )
     );
-
-    const created = results.filter((r) => {
-      const orig = ALL_CATEGORIES.find((c) => c.name === r.name);
-      return orig !== undefined;
-    });
 
     return NextResponse.json({
       ok: true,

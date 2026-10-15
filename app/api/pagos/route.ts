@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { paymentSchema } from '@/lib/validators';
 import { dateOnlyToUTC, todayISO } from '@/lib/dates';
+import { HttpError, errorResponse, formatCOP, readJson } from '@/lib/http';
+import { systemCategoryId } from '@/lib/categories';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -25,69 +27,71 @@ export async function POST(request: Request) {
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  const body = await request.json();
-  const parse = paymentSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
-  }
-
-  const { debtId, amount, accountId } = parse.data;
-
-  const debt = await prisma.debt.findFirst({ where: { id: debtId, userId } });
-  if (!debt) return NextResponse.json({ error: 'Deuda no encontrada' }, { status: 404 });
-
-  if (amount > debt.balance) {
-    return NextResponse.json(
-      { error: `El pago no puede superar el saldo de la deuda (${debt.balance.toLocaleString('es-CO')} COP)` },
-      { status: 400 }
-    );
-  }
-
-  let account = null;
-  if (accountId) {
-    account = await prisma.account.findFirst({ where: { id: accountId, userId } });
-    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-    if (amount > account.balance) {
-      return NextResponse.json(
-        { error: `Saldo insuficiente en la cuenta seleccionada (${account.balance.toLocaleString('es-CO')} COP disponibles)` },
-        { status: 400 }
-      );
-    }
-  }
-
-  const newBalance = Math.max(0, debt.balance - amount);
-
-  const payment = await prisma.$transaction(async (tx) => {
-    let expenseId: string | null = null;
-
-    if (account && accountId) {
-      const cat = await tx.category.upsert({
-        where: { name: 'Pago de Deuda' },
-        create: { name: 'Pago de Deuda', type: 'EXPENSE' },
-        update: {},
-      });
-      const expense = await tx.expense.create({
-        data: {
-          userId,
-          accountId,
-          categoryId: cat.id,
-          description: `Pago: ${debt.name} (${debt.entity})`,
-          amount,
-          date: dateOnlyToUTC(todayISO()), // calendar date, like user-entered expenses
-          frequency: 'ONE_TIME',
-        },
-      });
-      expenseId = expense.id;
-      await tx.account.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
+  try {
+    const parse = paymentSchema.safeParse(await readJson(request));
+    if (!parse.success) {
+      return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
     }
 
-    const payment = await tx.payment.create({
-      data: { userId, debtId, amount, accountId: accountId ?? null, expenseId },
+    const { debtId, amount, accountId } = parse.data;
+
+    // Friendly pre-checks. The guarded updates below re-check at write time,
+    // which is what protects against concurrent requests (double click).
+    const debt = await prisma.debt.findFirst({ where: { id: debtId, userId } });
+    if (!debt) return NextResponse.json({ error: 'Deuda no encontrada' }, { status: 404 });
+    if (amount > debt.balance) {
+      throw new HttpError(400, `El pago no puede superar el saldo de la deuda (${formatCOP(debt.balance)})`);
+    }
+
+    if (accountId) {
+      const account = await prisma.account.findFirst({ where: { id: accountId, userId } });
+      if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+      if (amount > account.balance) {
+        throw new HttpError(400, `Saldo insuficiente en la cuenta seleccionada (${formatCOP(account.balance)} disponibles)`);
+      }
+    }
+
+    const { payment, newBalance } = await prisma.$transaction(async (tx) => {
+      const debtUpdate = await tx.debt.updateMany({
+        where: { id: debtId, userId, balance: { gte: amount } },
+        data: { balance: { decrement: amount } },
+      });
+      if (debtUpdate.count !== 1) {
+        throw new HttpError(400, 'El pago supera el saldo actual de la deuda. Actualiza la página e intenta de nuevo.');
+      }
+
+      let expenseId: string | null = null;
+      if (accountId) {
+        const accountUpdate = await tx.account.updateMany({
+          where: { id: accountId, userId, balance: { gte: amount } },
+          data: { balance: { decrement: amount } },
+        });
+        if (accountUpdate.count !== 1) {
+          throw new HttpError(400, 'Saldo insuficiente en la cuenta seleccionada');
+        }
+        const expense = await tx.expense.create({
+          data: {
+            userId,
+            accountId,
+            categoryId: await systemCategoryId(tx, 'debtPayment'),
+            description: `Pago: ${debt.name} (${debt.entity})`,
+            amount,
+            date: dateOnlyToUTC(todayISO()), // calendar date, like user-entered expenses
+            frequency: 'ONE_TIME',
+          },
+        });
+        expenseId = expense.id;
+      }
+
+      const payment = await tx.payment.create({
+        data: { userId, debtId, amount, accountId: accountId ?? null, expenseId },
+      });
+      const updatedDebt = await tx.debt.findUniqueOrThrow({ where: { id: debtId } });
+      return { payment, newBalance: updatedDebt.balance };
     });
-    await tx.debt.update({ where: { id: debtId }, data: { balance: newBalance } });
 
-    return payment;
-  });
-
-  return NextResponse.json({ payment, newBalance }, { status: 201 });
+    return NextResponse.json({ payment, newBalance }, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
+  }
 }

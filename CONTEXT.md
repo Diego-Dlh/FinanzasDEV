@@ -223,7 +223,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 | totalAmount | Float |
 | installments | Int @default(1) |
 | installmentAmt | Float |
-| paidInstallments | Int @default(0) |
+| paidInstallments | Int @default(0) — **sin uso**: las cuotas vigentes se calculan por fecha en `lib/cards.ts` (una cuota por mes calendario desde el mes de la compra) |
 | date | DateTime |
 | FK | userId, cardId, categoryId |
 
@@ -323,8 +323,12 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `POST /api/admin/clave` | POST | Genera nueva clave (desactiva anteriores) |
 | `GET /api/admin/categorias` | GET | Lista todas las categorías globales con `_count {incomes, expenses, cardPurchases}` |
 | `POST /api/admin/categorias` | POST | Crea categoría global. Body: `{ name, type: 'INCOME'|'EXPENSE' }` |
-| `PUT /api/admin/categorias/[id]` | PUT | Renombra categoría. Body: `{ name }` |
-| `DELETE /api/admin/categorias/[id]` | DELETE | Elimina si no está en uso (verifica _count). Error 409 si hay registros |
+| `PUT /api/admin/categorias/[id]` | PUT | Renombra categoría. Body: `{ name }`. 409 si es de sistema o el nombre está reservado |
+| `DELETE /api/admin/categorias/[id]` | DELETE | Elimina si no está en uso (verifica _count). Error 409 si hay registros o si es de sistema |
+
+**Categorías de sistema** (`Category.isSystem`, definidas en `lib/categories.ts`): "Pago de Deuda" y "Abono Tarjeta". Las crea la app al registrar pagos/abonos; `GET /api/categorias` las oculta (usar `?all=1` para filtros del historial) y los ingresos/gastos/compras no pueden usarlas.
+
+**Saldos y concurrencia:** pagos, abonos y compras descuentan con `updateMany` condicionado (`saldo >= monto`) dentro de la transacción; las eliminaciones borran primero el registro y solo revierten si `count === 1`. Los gastos generados por un pago/abono (`linked`) no se pueden editar; eliminarlos revierte el pago.
 | `GET /api/admin/cuentas?userId=` | GET | Lista cuentas de un usuario con `_count {incomes, expenses}` |
 | `POST /api/admin/cuentas` | POST | Crea cuenta para un usuario. Body: `{ userId, name, type, balance, currency }` |
 | `PUT /api/admin/cuentas/[id]` | PUT | Edita cuenta. Body: `{ name, type, balance, currency }` |
@@ -601,7 +605,7 @@ docker exec lumina_app npx prisma migrate status
 ### Bugs pendientes
 1. **SSL:** Self-signed. Pendiente Let's Encrypt con certbot
 2. **IA:** Función local sin LLM real
-3. **paidInstallments en compras:** El campo existe pero no se incrementa al hacer abonos a tarjetas
+3. ~~paidInstallments en compras~~ — resuelto: las cuotas se derivan de la fecha (`lib/cards.ts`)
 
 ### Roadmap (desde `/about`)
 - v1.0–v1.3: completos ✓

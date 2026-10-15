@@ -50,6 +50,9 @@ async function main() {
       { name: 'Lujos',                type: 'EXPENSE' },
       { name: 'Tecnología',           type: 'EXPENSE' },
       { name: 'Gustos',               type: 'EXPENSE' },
+      // System (created by the app for debt / card payments)
+      { name: 'Pago de Deuda',        type: 'EXPENSE', isSystem: true },
+      { name: 'Abono Tarjeta',        type: 'EXPENSE', isSystem: true },
     ].map((cat) => prisma.category.create({ data: cat as any }))
   );
 

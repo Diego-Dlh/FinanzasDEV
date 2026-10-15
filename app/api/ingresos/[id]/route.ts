@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { incomeSchema } from '@/lib/validators';
+import { errorResponse } from '@/lib/http';
+import { validateCategory } from '@/lib/categories';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -28,6 +30,13 @@ export async function PUT(request: Request, { params }: Params) {
   if (accountChanged) {
     const account = await prisma.account.findFirst({ where: { id: newAccountId, userId } });
     if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+  }
+  if (parse.data.categoryId && parse.data.categoryId !== existing.categoryId) {
+    try {
+      await validateCategory(parse.data.categoryId, 'INCOME');
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
 
   const incomeUpdate = prisma.income.update({

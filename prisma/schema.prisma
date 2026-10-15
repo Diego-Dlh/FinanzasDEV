@@ -69,6 +69,7 @@ model Category {
   id            String         @id @default(cuid())
   name          String         @unique
   type          EntryType
+  isSystem      Boolean        @default(false)
   createdAt     DateTime       @default(now())
   incomes       Income[]
   expenses      Expense[]
