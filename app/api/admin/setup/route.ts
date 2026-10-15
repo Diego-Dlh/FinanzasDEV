@@ -1,20 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
-import { generateKey } from '@/lib/adminAuth';
+import { generateKey, hasValidSetupKey } from '@/lib/adminAuth';
 import { api } from '@/lib/http';
 
 const MIN_PASSWORD_LENGTH = 10;
 
-// GET /api/admin/setup?key=SEED_KEY[&resetPassword=1]
+// GET /api/admin/setup[?resetPassword=1]   (header: x-setup-key: <SEED_KEY>)
 // Idempotent. Creates the admin from ADMIN_EMAIL / ADMIN_PASSWORD / ADMIN_NAME
 // (or promotes an existing user with that email) and ensures an active
 // registration key. An existing admin's password is only overwritten when
 // resetPassword=1 is passed — the recovery path if the admin is locked out.
 async function handleGet(request: Request) {
   const { searchParams } = new URL(request.url);
-  const key = searchParams.get('key');
-  if (!process.env.SEED_KEY || !key || key !== process.env.SEED_KEY) {
+  if (!hasValidSetupKey(request)) {
     return NextResponse.json({ error: 'Clave inválida' }, { status: 403 });
   }
 

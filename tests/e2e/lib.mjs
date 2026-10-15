@@ -26,9 +26,9 @@ export const jwtSecret = () => need('JWT_SECRET');
  * password (a previous aborted run could have changed it). Idempotent.
  */
 export async function ensureSeeded() {
-  const get = (path) => fetch(`${API}${path}`);
-  const cats = await get(`/seed/categorias?key=${encodeURIComponent(SEED_KEY)}`);
-  const admin = await get(`/admin/setup?key=${encodeURIComponent(SEED_KEY)}&resetPassword=1`);
+  const get = (path) => fetch(`${API}${path}`, { headers: { 'x-setup-key': SEED_KEY } });
+  const cats = await get(`/seed/categorias`);
+  const admin = await get(`/admin/setup?resetPassword=1`);
   if (!cats.ok || !admin.ok) {
     console.error(`No se pudo preparar el servidor (categorías ${cats.status}, admin ${admin.status}). ¿Está en marcha y con SEED_KEY/ADMIN_* iguales a los de este entorno?`);
     process.exit(2);

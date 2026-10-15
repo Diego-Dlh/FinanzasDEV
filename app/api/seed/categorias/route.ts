@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
 import { api } from '@/lib/http';
+import { hasValidSetupKey } from '@/lib/adminAuth';
 
 const USER_CATEGORIES = [
   { name: 'Salario',              type: 'INCOME'  as const },
@@ -28,8 +29,7 @@ const ALL_CATEGORIES = [
 ];
 
 async function handleGet(req: NextRequest) {
-  const key = req.nextUrl.searchParams.get('key');
-  if (!process.env.SEED_KEY || key !== process.env.SEED_KEY) {
+  if (!hasValidSetupKey(req)) {
     return NextResponse.json({ error: 'Clave incorrecta o no configurada' }, { status: 401 });
   }
 

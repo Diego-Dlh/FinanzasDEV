@@ -14,6 +14,7 @@ const call = async (method, path, body, token) => {
   });
   return { status: r.status, body: await r.json().catch(() => ({})) };
 };
+const KEY = { 'x-setup-key': SEED_KEY };
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota' }).format(new Date());
 
 const login = async (email, password) => (await call('POST', '/auth/login', { email, password })).body.token;
@@ -56,19 +57,20 @@ ok('…ni comprar con la tarjeta de otro (404)', (await call('POST', `/tarjetas/
 section('C2 / C4 · rutas eliminadas');
 r = await call('POST', '/categorias', { name: 'Hack', type: 'EXPENSE' }, ana.token);
 ok('un usuario no puede crear categorías (405)', r.status === 405);
-r = await fetch(`${B}/seed?key=${SEED_KEY}`);
+r = await fetch(`${B}/seed`, { headers: KEY });
 ok('/api/seed ya no existe (404)', r.status === 404);
 
 section('C3 · /api/admin/setup');
-ok('clave incorrecta → 403', (await fetch(`${B}/admin/setup?key=incorrecta`)).status === 403);
+ok('clave incorrecta → 403', (await fetch(`${B}/admin/setup`, { headers: { 'x-setup-key': 'incorrecta' } })).status === 403);
+ok('la clave en la URL ya no sirve (403)', (await fetch(`${B}/admin/setup?key=${SEED_KEY}`)).status === 403);
 ok('sin clave → 403', (await fetch(`${B}/admin/setup`)).status === 403);
 ok('un usuario normal no entra al panel admin (403)', (await call('GET', '/admin/stats', undefined, ana.token)).status === 403);
 adminToken = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
 const changed = await call('PUT', '/auth/cambiar-password', { currentPassword: ADMIN_PASSWORD, newPassword: 'OtraClaveAdmin99' }, adminToken);
 ok('el admin cambia su contraseña desde la app', changed.status === 200);
-await fetch(`${B}/admin/setup?key=${SEED_KEY}`);
+await fetch(`${B}/admin/setup`, { headers: KEY });
 ok('volver a llamar a setup NO la sobrescribe', !!(await login(ADMIN_EMAIL, 'OtraClaveAdmin99')) && !(await login(ADMIN_EMAIL, ADMIN_PASSWORD)));
-const reset = await (await fetch(`${B}/admin/setup?key=${SEED_KEY}&resetPassword=1`)).json();
+const reset = await (await fetch(`${B}/admin/setup?resetPassword=1`, { headers: KEY })).json();
 ok('resetPassword=1 la devuelve al valor de ADMIN_PASSWORD', reset.passwordReset === true && !!(await login(ADMIN_EMAIL, ADMIN_PASSWORD)));
 adminToken = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
 

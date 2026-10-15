@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'Lumina Finance – Finanzas Personales',
   description: 'Gestión financiera personal premium con dashboard, deudas, presupuestos y análisis inteligente.',
   manifest: '/manifest.json',
+  icons: { icon: '/icon.svg' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -30,7 +30,7 @@ const frequencyEnum = z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'ONE_TIME']);
 
 export const incomeSchema = z.object({
   name: z.string().min(2, 'El nombre es requerido'),
-  amount: z.number().positive('El monto debe ser positivo'),
+  amount: z.number({ error: 'Ingresa un número válido' }).positive('El monto debe ser positivo'),
   categoryId: z.string().min(1, 'La categoría es requerida'),
   accountId: z.string().min(1, 'La cuenta es requerida'),
   date: calendarDate,
@@ -39,7 +39,7 @@ export const incomeSchema = z.object({
 
 export const expenseSchema = z.object({
   description: z.string().min(2, 'La descripción es requerida'),
-  amount: z.number().positive('El monto debe ser positivo'),
+  amount: z.number({ error: 'Ingresa un número válido' }).positive('El monto debe ser positivo'),
   categoryId: z.string().min(1, 'La categoría es requerida'),
   accountId: z.string().min(1, 'La cuenta es requerida'),
   date: calendarDate,
@@ -49,28 +49,28 @@ export const expenseSchema = z.object({
 export const debtSchema = z.object({
   name: z.string().min(2, 'El nombre es requerido'),
   entity: z.string().min(2, 'La entidad es requerida'),
-  balance: z.number().positive('El saldo debe ser positivo'),
-  interestRate: z.number().min(0, 'Tasa inválida').max(100, 'Tasa inválida'),
-  minPayment: z.number().positive('El pago mínimo debe ser positivo'),
+  balance: z.number({ error: 'Ingresa un número válido' }).positive('El saldo debe ser positivo'),
+  interestRate: z.number({ error: 'Ingresa un número válido' }).min(0, 'Tasa inválida').max(100, 'Tasa inválida'),
+  minPayment: z.number({ error: 'Ingresa un número válido' }).positive('El pago mínimo debe ser positivo'),
   dueDate: calendarDate,
 });
 
 // Editing may bring a debt to 0 (paid off); creating one with no balance makes no sense
 export const debtUpdateSchema = debtSchema.partial().extend({
-  balance: z.number().min(0, 'El saldo no puede ser negativo').optional(),
+  balance: z.number({ error: 'Ingresa un número válido' }).min(0, 'El saldo no puede ser negativo').optional(),
 });
 
 export const budgetSchema = z.object({
   name: z.string().min(2, 'El nombre es requerido'),
-  allocated: z.number().positive('El monto debe ser positivo'),
+  allocated: z.number({ error: 'Ingresa un número válido' }).positive('El monto debe ser positivo'),
   categoryId: z.string().min(1, 'Elige la categoría del presupuesto'),
 });
 
 const goalFields = {
   title: z.string().min(2, 'El título es requerido'),
   description: z.string().min(2, 'La descripción es requerida'),
-  targetAmount: z.number().positive('El monto objetivo debe ser positivo'),
-  currentAmount: z.number().min(0, 'El monto actual debe ser >= 0'),
+  targetAmount: z.number({ error: 'Ingresa un número válido' }).positive('El monto objetivo debe ser positivo'),
+  currentAmount: z.number({ error: 'Ingresa un número válido' }).min(0, 'El monto actual debe ser >= 0'),
   targetDate: calendarDate,
 };
 
@@ -85,25 +85,25 @@ export const goalUpdateSchema = z.object(goalFields).partial();
 
 export const paymentSchema = z.object({
   debtId:    z.string().min(1, 'La deuda es requerida'),
-  amount:    z.number().positive('El monto debe ser positivo'),
+  amount:    z.number({ error: 'Ingresa un número válido' }).positive('El monto debe ser positivo'),
   accountId: z.string().optional(),
 });
 
 export const creditCardSchema = z.object({
   name:         z.string().min(2, 'El nombre es requerido'),
   bank:         z.string().min(2, 'El banco es requerido'),
-  creditLimit:  z.number().positive('El cupo debe ser positivo'),
-  interestRate: z.number().positive('La tasa debe ser positiva'),
-  dueDay:       z.number().int().min(1, 'Día inválido').max(31, 'Día inválido'),
-  cutDay:       z.number().int().min(1, 'Día inválido').max(31, 'Día inválido'),
+  creditLimit:  z.number({ error: 'Ingresa un número válido' }).positive('El cupo debe ser positivo'),
+  interestRate: z.number({ error: 'Ingresa un número válido' }).positive('La tasa debe ser positiva'),
+  dueDay:       z.number({ error: 'Ingresa un número válido' }).int().min(1, 'Día inválido').max(31, 'Día inválido'),
+  cutDay:       z.number({ error: 'Ingresa un número válido' }).int().min(1, 'Día inválido').max(31, 'Día inválido'),
   currency:     z.string().default('COP'),
 });
 
 export const cardPurchaseSchema = z.object({
   description:  z.string().min(2, 'La descripción es requerida'),
   categoryId:   z.string().min(1, 'La categoría es requerida'),
-  totalAmount:  z.number().positive('El monto debe ser positivo'),
-  installments: z.number().int().min(1, 'Mínimo 1 cuota').max(48, 'Máximo 48 cuotas'),
+  totalAmount:  z.number({ error: 'Ingresa un número válido' }).positive('El monto debe ser positivo'),
+  installments: z.number({ error: 'Ingresa un número válido' }).int().min(1, 'Mínimo 1 cuota').max(48, 'Máximo 48 cuotas'),
   date:         calendarDate,
 });
 
@@ -116,7 +116,7 @@ export type BudgetInput      = z.infer<typeof budgetSchema>;
 export type GoalInput        = z.infer<typeof goalSchema>;
 export type PaymentInput     = z.infer<typeof paymentSchema>;
 export const cardPaymentSchema = z.object({
-  amount:    z.number().positive('El monto debe ser positivo'),
+  amount:    z.number({ error: 'Ingresa un número válido' }).positive('El monto debe ser positivo'),
   note:      z.string().optional(),
   paidAt:    calendarDate,
   accountId: z.string().optional(),

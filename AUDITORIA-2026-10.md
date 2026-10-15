@@ -289,18 +289,19 @@
 - [x] **M11** Seed idempotente o deshabilitado en producción — resuelto en la Fase 1 (`/api/seed` eliminado).
 
 ### Fase 7 — UX y pulido (PR 7)
-- [ ] **B1** try/catch en las acciones de alertas.
-- [ ] **B2** `AbortController` en historial y mostrar errores.
-- [ ] **B3** CSV con `;` y escape de fórmulas.
-- [ ] **B4** Crear `public/manifest.json` o quitar la referencia.
-- [ ] **B5** Enlazar `/calculadoras` en la navegación o eliminarla.
-- [ ] **B6** Ocultar el botón demo en producción; demo con `isAdmin: false`.
-- [ ] **B7** Reemplazar los colores hardcodeados por tokens del tema.
-- [ ] **B8** Resincronizar el tema al hacer login o logout.
-- [ ] **B9** Mensajes en español para `NaN`.
-- [ ] **B10** `crypto.randomInt` en `generateKey`.
-- [ ] **B11** Añadir CSP; pasar `SEED_KEY` por header en vez de query string.
-- [ ] **B12** Actualizar `CONTEXT.md` sin secretos.
+- [x] **B1** try/catch y aviso de error en las acciones de alertas.
+- [x] **B2** `AbortController` en historial; errores visibles con «Reintentar».
+- [x] **B3** CSV con `;`, `
+` y escape de fórmulas.
+- [x] **B4** `public/manifest.json` + `icon.svg`.
+- [x] **B5** `/calculadoras` en sidebar y barra inferior.
+- [x] **B6** Botón demo solo fuera de producción; el demo devuelve `isAdmin: false`.
+- [x] **B7** Colores del dashboard, presupuestos, historial y gráfico de flujo pasados a tokens del tema (con variante oscura).
+- [x] **B8** `ThemeProvider` recarga o reinicia el tema al iniciar o cerrar sesión.
+- [x] **B9** «Ingresa un número válido» en todos los `z.number()`.
+- [x] **B10** `crypto.randomInt` en `generateKey`.
+- [x] **B11** CSP en `next.config.mjs`, sin `X-XSS-Protection`; `SEED_KEY` por header `x-setup-key` (ya no se acepta en la URL).
+- [x] **B12** `CONTEXT.md` actualizado, sin secretos.
 
 ### Recomendación transversal — Tests
 No existe ninguna prueba automatizada. Priorizar tests de integración (Vitest + BD de prueba) para los flujos de dinero: crear, editar y eliminar ingresos y gastos; pagos y abonos (incluyendo dos peticiones concurrentes); eliminar deudas y tarjetas en modo "cerrar" y "eliminar". Esos flujos concentran la mayoría de los bugs de este informe.

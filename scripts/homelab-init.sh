@@ -61,7 +61,7 @@ ok "App healthy (migraciones aplicadas)."
 # ─── 3. Categorías y administrador ───────────────────────────────────────────
 # Se llama desde dentro del contenedor: la SEED_KEY nunca pasa por Cloudflare.
 call_internal() {
-  docker exec lumina_app wget -qO- "http://localhost:3000$1?key=${SEED_KEY}"
+  docker exec lumina_app wget -qO- --header="x-setup-key: ${SEED_KEY}" "http://localhost:3000$1"
 }
 
 log "Creando categorías..."

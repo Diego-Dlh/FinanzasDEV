@@ -16,7 +16,7 @@ async function handleGet() {
       id: DEMO_USER_ID,
       name: 'Diego Demo',
       email: 'demo@luminafi.com',
-      isAdmin: true,
+      isAdmin: false,
     },
   });
 }

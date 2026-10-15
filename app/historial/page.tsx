@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Wallet, Search, History, Download } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -76,7 +76,8 @@ function fmtShort(n: number) {
   return `$${n.toFixed(0)}`;
 }
 
-const PIE_COLORS = ['#2563eb','#16a34a','#dc2626','#ca8a04','#7c3aed','#0891b2','#be185d','#ea580c','#065f46','#92400e'];
+// Theme-aware: the palette lives in globals.css so it adapts to dark mode
+const PIE_COLORS = Array.from({ length: 10 }, (_, i) => `var(--chart-${i + 1})`);
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function HistorialPage() {
@@ -88,21 +89,34 @@ export default function HistorialPage() {
   const [data, setData]         = useState<HistorialData | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+
+  // Only the latest request may update the screen: a slow, older response must not overwrite a newer one
+  const abortRef = useRef<AbortController | null>(null);
 
   async function loadData() {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
+    setError('');
     try {
       const { from, to } = periodToRange(period);
       const qs = new URLSearchParams({ from, to, type, ...(catId ? { categoryId: catId } : {}) });
       const [histRes, catRes] = await Promise.all([
-        api.get<HistorialData>(`/historial?${qs}`),
-        categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias?all=1'),
+        api.get<HistorialData>(`/historial?${qs}`, controller.signal),
+        categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias?all=1', controller.signal),
       ]);
+      if (controller.signal.aborted) return;
       setData(histRes);
       // Card payments aren't listed (the purchase already counts), so don't offer them as a filter
       if (!categories.length) setCategories((catRes as { categories: Category[] }).categories.filter((c) => c.name !== 'Abono Tarjeta'));
-    } catch { /* silencioso */ }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el historial');
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }
 
   function exportCSV() {
@@ -116,9 +130,11 @@ export default function HistorialPage() {
       t.account,
       String(t.amount),
     ]);
+    // ";" because Excel in Spanish locales splits columns on it; a leading = + - @ would run as a formula
+    const safe = (cell: string) => (/^[=+\-@\t\r]/.test(cell) ? `'${cell}` : cell);
     const csv = [headers, ...rows]
-      .map((r) => r.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+      .map((r) => r.map((cell) => `"${safe(cell).replace(/"/g, '""')}"`).join(';'))
+      .join('\r\n');
     // BOM UTF-8 para que Excel abra con tildes correctas
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -207,6 +223,13 @@ export default function HistorialPage() {
           </select>
         </div>
 
+        {error && (
+          <div role="alert" className="rounded-2xl bg-error/10 text-error text-sm px-4 py-3 flex items-center justify-between gap-3">
+            <span>{error}</span>
+            <button onClick={() => loadData()} className="font-semibold underline shrink-0">Reintentar</button>
+          </div>
+        )}
+
         {/* ── Summary cards ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-4">
           <SummaryCard
@@ -255,8 +278,8 @@ export default function HistorialPage() {
                         contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 16px 40px rgba(0,0,0,0.12)' }}
                         formatter={(v, name) => [fmt(Number(v)), name === 'income' ? 'Ingresos' : 'Gastos']}
                       />
-                      <Bar dataKey="income"  name="income"  fill="#006e2a" radius={[8, 8, 0, 0]} barSize={16} />
-                      <Bar dataKey="expense" name="expense" fill="#ba1a1a" radius={[8, 8, 0, 0]} barSize={16} />
+                      <Bar dataKey="income"  name="income"  fill="var(--color-secondary)" radius={[8, 8, 0, 0]} barSize={16} />
+                      <Bar dataKey="expense" name="expense" fill="var(--color-error)" radius={[8, 8, 0, 0]} barSize={16} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

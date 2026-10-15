@@ -127,13 +127,13 @@ export default function HomePage() {
           <div className="glass-card rounded-[24px] p-5 flex flex-col items-center justify-center gap-3 shadow-card">
             <div className="relative w-20 h-20">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                <circle cx="50" cy="50" r="40" stroke="#e4e2e4" strokeWidth="8" fill="none" />
+                <circle cx="50" cy="50" r="40" strokeWidth="8" fill="none" className="stroke-surface-container-highest" />
                 <circle
-                  cx="50" cy="50" r="40" stroke="#006e2a" strokeWidth="8" fill="none"
+                  cx="50" cy="50" r="40" strokeWidth="8" fill="none"
                   strokeLinecap="round"
                   strokeDasharray="251.2"
                   strokeDashoffset={scoreOffset}
-                  className="transition-all duration-700"
+                  className="stroke-secondary transition-all duration-700"
                 />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center text-xl font-bold text-primary">

@@ -100,11 +100,11 @@ docker compose -f docker-compose.prod.yml up -d
 Desde el servidor (la clave no viaja por internet):
 
 ```bash
-docker exec lumina_app wget -qO- "http://localhost:3000/api/seed/categorias?key=TU_SEED_KEY"
-docker exec lumina_app wget -qO- "http://localhost:3000/api/admin/setup?key=TU_SEED_KEY"
+docker exec lumina_app wget -qO- --header="x-setup-key: TU_SEED_KEY" "http://localhost:3000/api/seed/categorias"
+docker exec lumina_app wget -qO- --header="x-setup-key: TU_SEED_KEY" "http://localhost:3000/api/admin/setup"
 ```
 
-`/api/admin/setup` crea el admin con `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` (obligatorias) y no cambia la contraseña de un admin existente salvo que se agregue `&resetPassword=1`.
+`/api/admin/setup` crea el admin con `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` (obligatorias) y no cambia la contraseña de un admin existente salvo que se agregue `?resetPassword=1`. La clave va en el header `x-setup-key`, nunca en la URL.
 
 ---
 
@@ -229,8 +229,8 @@ curl https://tudominio.com/api/health
 
 ```
 ├── app/api/health/     → GET /api/health (Docker healthcheck)
-├── app/api/seed/categorias/ → GET ?key=... (categorías, idempotente)
-├── app/api/admin/setup/     → GET ?key=... (admin + clave de registro)
+├── app/api/seed/categorias/ → GET + header x-setup-key (categorías, idempotente)
+├── app/api/admin/setup/     → GET + header x-setup-key (admin + clave de registro)
 ├── docker/entrypoint.sh
 ├── docker-compose.prod.yml
 ├── nginx/

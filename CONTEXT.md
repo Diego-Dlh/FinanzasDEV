@@ -83,7 +83,7 @@ Usar siempre variables CSS del tema: `bg-surface`, `bg-surface-container`, `bg-s
 - **Sesiones:** cambiar la contraseña (`PUT /api/auth/cambiar-password`) incrementa `User.tokenVersion` y devuelve un token nuevo para el dispositivo actual; las demás sesiones reciben 401 y la interfaz las lleva al login.
 - **API:** todas las rutas exportan `export const GET = api(handleGet)` (`lib/http.ts`): cualquier error se convierte en JSON (`HttpError` → su estado, JSON inválido → 400, P2002 → 409, P2025 → 404, BD caída → 503, resto → 500). Usar `parseBody(request, schema)` para validar. Nunca devolver errores como objeto: siempre `{ error: string }`.
 - **Saldos de ingresos/gastos:** editar y eliminar bloquean la fila (`lib/rowLocks.ts`, `FOR UPDATE`) y la releen dentro de la transacción antes de calcular la diferencia.
-- `lib/adminAuth.ts`: `requireAdmin(authHeader)` — verifica userId + `isAdmin: true` en DB; `generateKey()` — genera código 6 chars alfanumérico sin ambiguos (sin 0/O, 1/I)
+- `lib/adminAuth.ts`: `requireAdmin(authHeader)` — verifica userId + `isAdmin: true` en DB; `generateKey()` — código de 6 caracteres sin ambiguos (sin 0/O, 1/I) con `crypto.randomInt`; `hasValidSetupKey(req)` — compara en tiempo constante el header `x-setup-key` con `SEED_KEY`
 - `lib/hooks/useAuth.tsx`: `AuthProvider`, `useAuth()`, `useProtected()`
   - `AuthUser = { id, name, email, isAdmin?: boolean }`
 - `lib/hooks/useTheme.tsx`: `ThemeProvider`, `useTheme()` — lee localStorage + sincroniza con DB
@@ -266,7 +266,7 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 | `/api/auth/register` | POST | No | Valida `registrationKey` contra clave activa en DB. Crea user + 3 cuentas + Setting + Alert bienvenida |
 | `/api/auth/login` | POST | No | Retorna `{ token, user: { id, name, email, isAdmin } }` |
 | `/api/auth/cambiar-password` | PUT | Sí | Verifica `currentPassword`, hashea `newPassword`, actualiza |
-| `/api/demo-login` | GET | No | **Solo desarrollo** (bloqueado en NODE_ENV=production). Genera JWT para usuario demo sin DB. Retorna `{ token, user: { id: 'demo-user-id', name: 'Diego Demo', email: 'demo@luminafi.com', isAdmin: true } }` |
+| `/api/demo-login` | GET | No | **Solo desarrollo** (bloqueado en NODE_ENV=production). Genera JWT para usuario demo sin DB. Retorna `{ token, user: { id: 'demo-user-id', name: 'Diego Demo', email: 'demo@luminafi.com', isAdmin: false } }` |
 
 ### Dashboard
 | Ruta | Descripción |
@@ -336,7 +336,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `POST /api/admin/cuentas` | POST | Crea cuenta para un usuario. Body: `{ userId, name, type, balance, currency }` |
 | `PUT /api/admin/cuentas/[id]` | PUT | Edita cuenta. Body: `{ name, type, balance, currency }` |
 | `DELETE /api/admin/cuentas/[id]` | DELETE | Elimina si no tiene transacciones. Error 409 si hay registros |
-| `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY[&resetPassword=1]`. Idempotente. Crea el admin desde `ADMIN_EMAIL`/`ADMIN_PASSWORD` (o promueve ese usuario). No cambia la contraseña existente salvo `resetPassword=1` |
+| `GET /api/admin/setup` | GET | Header `x-setup-key: <SEED_KEY>` (no se acepta en la URL); `?resetPassword=1` opcional. Idempotente. Crea el admin desde `ADMIN_EMAIL`/`ADMIN_PASSWORD` (o promueve ese usuario). No cambia la contraseña existente salvo `resetPassword=1` |
 
 ### Pagos de deudas
 | Ruta | Método | Descripción |
@@ -348,7 +348,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | Ruta | Descripción |
 |------|-------------|
 | `GET /api/health` | Prueba DB con SELECT 1 |
-| `GET /api/seed/categorias?key=SEED_KEY` | Upsert idempotente de categorías |
+| `GET /api/seed/categorias` (header `x-setup-key`) | Upsert idempotente de categorías |
 
 ---
 
@@ -489,7 +489,7 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 │       ├── configuracion/route.ts       # GET con try/catch → default setting
 │       ├── historial/route.ts           # try/catch → vacío
 │       ├── health/route.ts
-│       ├── seed/route.ts + categorias/
+│       ├── seed/categorias/
 │       ├── tarjetas/route.ts            # GET con try/catch → []
 │       ├── tarjetas/[id]/route.ts
 │       ├── tarjetas/[id]/compras/route.ts
@@ -564,7 +564,7 @@ rm -rf .next && npm run dev
 # Actualizar: ./scripts/deploy.sh  (el entrypoint corre prisma migrate deploy)
 
 # Admin bloqueado: restablecer su contraseña al valor de ADMIN_PASSWORD
-docker exec lumina_app wget -qO- "http://localhost:3000/api/admin/setup?key=TU_SEED_KEY&resetPassword=1"
+docker exec lumina_app wget -qO- --header="x-setup-key: TU_SEED_KEY" "http://localhost:3000/api/admin/setup?resetPassword=1"
 
 # Ver logs
 docker logs -f lumina_app
@@ -587,7 +587,7 @@ docker exec lumina_app npx prisma migrate status
 - Historial con filtros/charts
 - TopBar: settings modal con botón admin (si isAdmin), dark mode, cambiar contraseña, notificaciones
 - Dark mode completo con anti-FOUC
-- Sidebar (desktop) + BottomNav (mobile) con 9 items
+- Sidebar (desktop) + BottomNav (mobile) con 10 items (incluye Calculadoras)
 - Panel admin (`/admin`): tema-aware, categorías CRUD, cuentas CRUD por usuario, usuarios con cascade delete, clave de registro
 - Botón admin en settings modal del TopBar (solo visible si isAdmin)
 - Registro controlado con clave de acceso
@@ -689,3 +689,14 @@ Espera la siguiente instrucción.
 - `docker-compose.yml` es solo para desarrollo (la BD; la app queda tras `--profile app`). Producción: `docker-compose.prod.yml` o `docker-compose.homelab.yml`.
 - `scripts/restore.sh` restaura en una BD temporal, la valida y solo entonces la intercambia; hace un backup previo y detiene/reinicia la app.
 - Montos: siguen en `Float` (decisión I5, ver `docs/DECISIONES.md`).
+
+## 18. Interfaz y seguridad web (Fase 7)
+
+- Cabeceras en `next.config.mjs`: CSP (`script-src` lleva `'unsafe-inline'` por los scripts en línea de Next y el del tema), `frame-ancestors 'none'`. Sin `X-XSS-Protection` (obsoleto).
+- Colores: solo tokens del tema (`globals.css`), incluidos `--color-warning` y la paleta `--chart-N`, que tienen variante oscura. Evitar hex fijos.
+- `ThemeProvider` depende de `useAuth`: al iniciar o cerrar sesión se carga (o reinicia) la preferencia de tema.
+- Historial: peticiones con `AbortController`, errores visibles con "Reintentar"; CSV con `;`, `\r\n` y escape de fórmulas (`=`, `+`, `-`, `@`).
+- `/api/demo-login` devuelve `isAdmin: false`; el botón demo solo se muestra fuera de producción.
+- `public/manifest.json` + `icon.svg`; `/calculadoras` está en el menú.
+- Validadores: los `z.number()` muestran "Ingresa un número válido" cuando el campo queda vacío (`NaN`).
+- Estado: el CONTEXT refleja el código tras las fases 1-7; las secciones antiguas de "estado actual" (sección 13) son históricas.

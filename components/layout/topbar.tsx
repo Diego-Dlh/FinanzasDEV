@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validators';
 import { Modal } from '@/components/ui/modal';
 import { Field, Input, Btn } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast';
 
 export const ALERTS_REFRESH_EVENT = 'lumina:alerts-refresh';
 
@@ -25,6 +26,9 @@ export function TopBar({ title }: { title: string }) {
   const { user, logout } = useAuth();
   const { isDark, toggle } = useTheme();
   const router = useRouter();
+  const toast = useToast();
+  const toastError = (err: unknown, fallback: string) =>
+    toast.error(err instanceof Error && err.message ? err.message : fallback);
 
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -87,22 +91,34 @@ export function TopBar({ title }: { title: string }) {
   }
 
   async function handleMarkAllRead() {
-    await api.put('/alertas', { markAllRead: true });
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    setUnreadCount(0);
+    try {
+      await api.put('/alertas', { markAllRead: true });
+      setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      toastError(err, 'No se pudieron marcar las alertas');
+    }
   }
 
   async function handleMarkOneRead(id: string) {
-    await api.put(`/alertas/${id}`, {});
-    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
-    setUnreadCount((n) => Math.max(0, n - 1));
+    try {
+      await api.put(`/alertas/${id}`, {});
+      setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, read: true } : a)));
+      setUnreadCount((n) => Math.max(0, n - 1));
+    } catch (err) {
+      toastError(err, 'No se pudo marcar la alerta');
+    }
   }
 
   async function handleDeleteAlert(id: string) {
     const wasUnread = alerts.find((a) => a.id === id)?.read === false;
-    await api.delete(`/alertas/${id}`);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
-    if (wasUnread) setUnreadCount((n) => Math.max(0, n - 1));
+    try {
+      await api.delete(`/alertas/${id}`);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+      if (wasUnread) setUnreadCount((n) => Math.max(0, n - 1));
+    } catch (err) {
+      toastError(err, 'No se pudo eliminar la alerta');
+    }
   }
 
   async function onChangePassword(data: ChangePasswordInput) {

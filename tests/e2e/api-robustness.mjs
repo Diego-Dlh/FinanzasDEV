@@ -72,7 +72,7 @@ const demoToken = jwt.sign({ userId: 'demo-user-id', tv: 0 }, SECRET, { expiresI
 r = await call('GET', '/dashboard', undefined, demoToken);
 ok('el usuario demo sigue funcionando sin fila en la BD', r.status === 200 && r.body.totalBalance === 5_500_000);
 const adminBefore = adminToken;
-r = await call('GET', `/admin/setup?key=${SEED_KEY}&resetPassword=1`);
+r = { body: await (await fetch(`${B}/admin/setup?resetPassword=1`, { headers: { 'x-setup-key': SEED_KEY } })).json() };
 ok('resetPassword=1 responde ok', r.body.passwordReset === true);
 ok('…e invalida las sesiones previas del admin', (await call('GET', '/admin/me', undefined, adminBefore)).status === 403 || (await call('GET', '/admin/stats', undefined, adminBefore)).status === 403);
 adminToken = await login(ADMIN_EMAIL, ADMIN_PASSWORD);

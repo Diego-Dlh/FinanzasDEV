@@ -203,8 +203,8 @@ export default function BudgetPage() {
                   <div key={b.id} className="glass-card rounded-[24px] p-5 shadow-card">
                     <div className="flex items-center justify-between gap-4 mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${over ? 'bg-error/10' : warning ? 'bg-amber-50' : 'bg-secondary/10'}`}>
-                          {over ? <AlertTriangle size={16} className="text-error" /> : warning ? <AlertTriangle size={16} className="text-amber-500" /> : <CheckCircle2 size={16} className="text-secondary" />}
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${over ? 'bg-error/10' : warning ? 'bg-warning/10' : 'bg-secondary/10'}`}>
+                          {over ? <AlertTriangle size={16} className="text-error" /> : warning ? <AlertTriangle size={16} className="text-warning" /> : <CheckCircle2 size={16} className="text-secondary" />}
                         </div>
                         <div>
                           <p className="font-semibold text-on-surface">{b.name}</p>
@@ -218,7 +218,7 @@ export default function BudgetPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${over ? 'bg-error/10 text-error' : warning ? 'bg-amber-50 text-amber-600' : 'bg-secondary/10 text-secondary'}`}>
+                        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${over ? 'bg-error/10 text-error' : warning ? 'bg-warning/10 text-warning' : 'bg-secondary/10 text-secondary'}`}>
                           {over ? 'Excedido' : warning ? 'Cuidado' : 'OK'}
                         </span>
                         <button onClick={() => { setEditBudget(b); resetB({ name: b.name, allocated: b.allocated, categoryId: b.categoryId ?? '' }); setShowBudgetModal(true); }} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container transition text-on-surface-variant">
@@ -231,7 +231,7 @@ export default function BudgetPage() {
                     </div>
                     <div className="h-2.5 w-full rounded-full bg-surface-container-highest overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all ${over ? 'bg-error' : warning ? 'bg-amber-400' : 'bg-secondary'}`}
+                        className={`h-full rounded-full transition-all ${over ? 'bg-error' : warning ? 'bg-warning' : 'bg-secondary'}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
