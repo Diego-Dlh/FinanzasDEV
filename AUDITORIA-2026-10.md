@@ -225,12 +225,13 @@
 - [ ] Verificar si Render define `NODE_ENV=production` (si no, `/api/demo-login` está habilitado allí).
 
 ### Fase 1 — Seguridad crítica (PR 1)
-- [ ] **C1** Validar la propiedad de `accountId` en el PUT de ingresos y gastos.
-- [ ] **C2** Eliminar o proteger `POST /api/categorias`.
-- [ ] **C3** `admin/setup`: sin contraseña por defecto, sin sobrescribir la contraseña existente; `render.yaml` sin `SEED_KEY` en claro.
-- [ ] **C4** Quitar credenciales de `seed/route.ts`, `prisma/seed.ts`, `README.md` y `CONTEXT.md`.
-- [ ] **C5** Endurecer `getJwtSecret()` (bloquear `CHANGE_ME` y longitudes < 32).
-- [ ] **S1** Manejo de 401 en `lib/api.ts` → logout automático.
+- [x] **C1** Validar la propiedad de `accountId` en el PUT de ingresos y gastos.
+- [x] **C2** Eliminar o proteger `POST /api/categorias` (eliminado; queda `POST /api/admin/categorias`).
+- [x] **C3** `admin/setup`: sin contraseña por defecto, sin sobrescribir la contraseña existente (salvo `resetPassword=1`); `render.yaml` sin `SEED_KEY` en claro.
+- [x] **C4** Quitar credenciales de `prisma/seed.ts`, `README.md` y `CONTEXT.md`; `/api/seed` eliminado (también resuelve **M11**).
+- [x] **C5** Endurecer `getJwtSecret()` (bloquear `CHANGE_ME` y longitudes < 32); la app no arranca con un secreto inválido.
+- [x] **S1** Manejo de 401 en `lib/api.ts` y en el panel admin → logout automático.
+- [ ] **Pendiente manual:** las credenciales antiguas siguen en el **historial de git**. Rótalas (Fase 0) y, si el repo será público, límpialo con `git filter-repo`.
 
 ### Fase 2 — Funcionalidad rota y datos engañosos (PR 2)
 - [ ] **C6** Corregir la URL de `/alertas/auto`.

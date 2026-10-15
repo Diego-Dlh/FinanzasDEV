@@ -1,10 +1,23 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 
 const prisma = new PrismaClient();
 
+// Local development only: this script WIPES the whole database.
+// Demo user password comes from SEED_DEMO_PASSWORD or is generated randomly.
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('prisma/seed.ts borra toda la base de datos; no se ejecuta con NODE_ENV=production.');
+  }
+
+  const demoPassword = process.env.SEED_DEMO_PASSWORD || randomBytes(9).toString('base64url');
+
   // Clear all data in dependency order
+  await prisma.cardPayment.deleteMany();
+  await prisma.cardPurchase.deleteMany();
+  await prisma.creditCard.deleteMany();
+  await prisma.registrationKey.deleteMany();
   await prisma.payment.deleteMany();
   await prisma.debt.deleteMany();
   await prisma.income.deleteMany();
@@ -46,7 +59,7 @@ async function main() {
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   // ─── USER 1: Alex Sterling (cuenta demo / testing) ───────────────────────────
-  const alexPwd = await bcrypt.hash('test1234', 10);
+  const alexPwd = await bcrypt.hash(demoPassword, 10);
   const alex = await prisma.user.create({
     data: {
       name: 'Alex Sterling',
@@ -117,61 +130,13 @@ async function main() {
     ],
   });
 
-  // ─── USER 2: Diego De la hoz ──────────────────────────────────────────────────
-  const diegoPwd = await bcrypt.hash('1004360', 10);
-  const diego = await prisma.user.create({
-    data: {
-      name: 'Diego De la hoz',
-      email: 'diego@finanzasdev.com',
-      password: diegoPwd,
-      settings: { create: { darkMode: false, notifications: true } },
-    },
-  });
-
-  await prisma.account.createMany({
-    data: [
-      { userId: diego.id, name: 'Cuenta Principal', type: 'BANK', balance: 0, currency: 'COP' },
-      { userId: diego.id, name: 'Efectivo',          type: 'CASH', balance: 0, currency: 'COP' },
-      { userId: diego.id, name: 'Ahorro',            type: 'BANK', balance: 0, currency: 'COP' },
-    ],
-  });
-
-  await prisma.alert.create({
-    data: { userId: diego.id, message: '¡Bienvenido a Lumina Finance! Comienza registrando tus ingresos.', type: 'SPENDING_ALERT' },
-  });
-
-  // ─── USER 3: Melissa Perez ────────────────────────────────────────────────────
-  const melissaPwd = await bcrypt.hash('108283', 10);
-  const melissa = await prisma.user.create({
-    data: {
-      name: 'Melissa Perez',
-      email: 'melissa@finanzasdev.com',
-      password: melissaPwd,
-      settings: { create: { darkMode: false, notifications: true } },
-    },
-  });
-
-  await prisma.account.createMany({
-    data: [
-      { userId: melissa.id, name: 'Cuenta Principal', type: 'BANK', balance: 0, currency: 'COP' },
-      { userId: melissa.id, name: 'Efectivo',          type: 'CASH', balance: 0, currency: 'COP' },
-      { userId: melissa.id, name: 'Ahorro',            type: 'BANK', balance: 0, currency: 'COP' },
-    ],
-  });
-
-  await prisma.alert.create({
-    data: { userId: melissa.id, message: '¡Bienvenida a Lumina Finance! Comienza registrando tus ingresos.', type: 'SPENDING_ALERT' },
-  });
-
   console.log('✅ Seed completado exitosamente');
   console.log('');
-  console.log('👤 Usuarios creados:');
-  console.log('   alex@finanzasdev.com       → test1234   (cuenta demo con datos)');
-  console.log('   diego@finanzasdev.com      → 1004360    (cuenta limpia)');
-  console.log('   melissa@finanzasdev.com    → 108283     (cuenta limpia)');
+  console.log('👤 Usuario demo creado:');
+  console.log(`   alex@finanzasdev.com  →  ${demoPassword}`);
   console.log('');
   console.log('🗂  Categorías: 6 ingresos · 9 gastos');
-  console.log('🏦  Cuentas por usuario: Cuenta Principal · Efectivo · Ahorro');
+  console.log('🏦  Cuentas: Cuenta Principal · Efectivo · Ahorro');
 }
 
 main()

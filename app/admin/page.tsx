@@ -67,7 +67,13 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   Object.assign(headers, opts?.headers ?? {});
 
   const res = await fetch(`/api${path}`, { ...opts, headers });
-  const json = await res.json();
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 401 && token) {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    window.location.replace('/auth/login');
+    throw new Error('Tu sesión expiró. Inicia sesión de nuevo.');
+  }
   if (!res.ok) throw new Error(json.error ?? 'Error');
   return json as T;
 }

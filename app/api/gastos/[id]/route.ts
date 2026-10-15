@@ -25,6 +25,11 @@ export async function PUT(request: Request, { params }: Params) {
   const accountChanged = newAccountId !== existing.accountId;
   const amountChanged  = newAmount !== existing.amount;
 
+  if (accountChanged) {
+    const account = await prisma.account.findFirst({ where: { id: newAccountId, userId } });
+    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+  }
+
   const expenseUpdate = prisma.expense.update({
     where: { id },
     data: {

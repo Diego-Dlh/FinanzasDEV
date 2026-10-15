@@ -9,8 +9,8 @@
 - **Nombre:** Lumina Finance
 - **Descripción:** App de finanzas personales premium en español, orientada al mercado colombiano (moneda COP)
 - **Repo GitHub:** https://github.com/Diego-Dlh/FinanzasDEV
-- **VPS producción:** 31.97.138.41 (Hostinger, Ubuntu 24.04)
-- **Ruta en VPS:** `/opt/lumina`
+- **Producción:** homelab propio con Cloudflare Tunnel (ver `docs/HOMELAB.md`)
+- **VPS anterior (legado):** Hostinger, Ubuntu 24.04, ruta `/opt/lumina`
 - **Backup/staging Render:** https://finanzasdev.onrender.com
 - **package.json name:** `finanzasdev`
 
@@ -329,7 +329,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `POST /api/admin/cuentas` | POST | Crea cuenta para un usuario. Body: `{ userId, name, type, balance, currency }` |
 | `PUT /api/admin/cuentas/[id]` | PUT | Edita cuenta. Body: `{ name, type, balance, currency }` |
 | `DELETE /api/admin/cuentas/[id]` | DELETE | Elimina si no tiene transacciones. Error 409 si hay registros |
-| `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY`. Idempotente. Crea/actualiza admin@luminafi.com con isAdmin:true |
+| `GET /api/admin/setup` | GET | Query: `?key=SEED_KEY[&resetPassword=1]`. Idempotente. Crea el admin desde `ADMIN_EMAIL`/`ADMIN_PASSWORD` (o promueve ese usuario). No cambia la contraseña existente salvo `resetPassword=1` |
 
 ### Pagos de deudas
 | Ruta | Método | Descripción |
@@ -341,7 +341,6 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | Ruta | Descripción |
 |------|-------------|
 | `GET /api/health` | Prueba DB con SELECT 1 |
-| `GET /api/seed?key=SEED_KEY` | Seed inicial (idempotente) |
 | `GET /api/seed/categorias?key=SEED_KEY` | Upsert idempotente de categorías |
 
 ---
@@ -414,7 +413,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
   3. **Categorías:** tabs Ingresos/Egresos, lista con edición inline (lápiz → input → Enter/✓), botón eliminar (deshabilitado si en uso), campo agregar al final
   4. **Cuentas de usuario:** select de usuario → lista cuentas con tipo/saldo/conteo txn, edición inline expandible, botón eliminar (deshabilitado si tiene txn), formulario agregar cuenta
   5. Usuarios registrados: tabla con nombre/email/actividad/fecha, botón eliminar (cascade completo)
-- Admin: `admin@luminafi.com` / `Dlh2026`
+- Admin: definido por `ADMIN_EMAIL` / `ADMIN_PASSWORD` en el `.env` (nunca documentar credenciales aquí)
 
 ---
 
@@ -536,10 +535,10 @@ changePasswordSchema  // currentPassword, newPassword, confirmPassword (.refine 
 |----------|-------------|---------|
 | `DATABASE_URL` | URL Prisma | `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | Secreto JWT (min 32 chars) | `openssl rand -base64 64` |
-| `SEED_KEY` | Clave para endpoints /api/seed y /api/admin/setup | String aleatorio |
-| `ADMIN_EMAIL` | Email del admin (opcional, default: admin@luminafi.com) | |
-| `ADMIN_PASSWORD` | Password del admin (opcional, default: Dlh2026) | |
-| `ADMIN_NAME` | Nombre del admin (opcional, default: Admin Lumina) | |
+| `SEED_KEY` | Clave para /api/seed/categorias y /api/admin/setup | String aleatorio |
+| `ADMIN_EMAIL` | Email del admin (**obligatorio** para /api/admin/setup) | |
+| `ADMIN_PASSWORD` | Password del admin (**obligatorio**, mín. 10 caracteres, sin default) | |
+| `ADMIN_NAME` | Nombre del admin (opcional, default: Administrador) | |
 | `NODE_ENV` | `production` en VPS | |
 
 ---
@@ -553,14 +552,12 @@ npm run dev
 # Limpiar caché y reiniciar (si hay errores de hydration)
 rm -rf .next && npm run dev
 
-# Deploy en VPS (autodeploy en cada push a main)
-# El entrypoint.sh corre: npx prisma migrate deploy && npm start
+# Homelab: primer arranque (valida .env, levanta stack, crea admin y categorías)
+./scripts/homelab-init.sh
+# Actualizar: ./scripts/deploy.sh  (el entrypoint corre prisma migrate deploy)
 
-# Primera vez o cuando cambia el schema:
-curl "https://luminafi.com/api/admin/setup?key=TU_SEED_KEY"
-
-# Seed de categorías (idempotente, safe en producción):
-curl "https://luminafi.com/api/seed/categorias?key=TU_SEED_KEY"
+# Admin bloqueado: restablecer su contraseña al valor de ADMIN_PASSWORD
+docker exec lumina_app wget -qO- "http://localhost:3000/api/admin/setup?key=TU_SEED_KEY&resetPassword=1"
 
 # Ver logs
 docker logs -f lumina_app

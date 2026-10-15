@@ -68,7 +68,12 @@ El script:
 
 Abre `https://finanzas.tudominio.com` e inicia sesión con el admin.
 
-> Es idempotente: se puede volver a ejecutar sin duplicar datos. Ten en cuenta que **restablece la contraseña del admin** al valor de `ADMIN_PASSWORD`; si la cambias desde la app, actualiza también el `.env`.
+> Es idempotente: se puede volver a ejecutar sin duplicar datos ni tocar la contraseña del admin si la cambiaste desde la app.
+>
+> **¿Olvidaste la contraseña del admin?** Restablécela al valor de `ADMIN_PASSWORD` del `.env`:
+> ```bash
+> docker exec lumina_app wget -qO- "http://localhost:3000/api/admin/setup?key=$(grep ^SEED_KEY= .env | cut -d= -f2-)&resetPassword=1"
+> ```
 
 ## 5. Operación diaria
 

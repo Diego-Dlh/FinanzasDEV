@@ -1,16 +1,33 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
-// Fail loudly in production if the secret is not set or is the example value
+const MIN_JWT_SECRET_LENGTH = 32;
+
+// Placeholders that appear in the repo's example env files and compose files
+function isPlaceholderSecret(secret: string) {
+  const s = secret.toLowerCase();
+  return s.includes('change_me') || s.includes('change_this') || s === 'super_secure_change_me';
+}
+
+// Fail loudly in production if the secret is missing, short, or an example value
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
-  if (!secret || secret === 'change_this_secret' || secret === 'super_secure_change_me') {
+  if (!secret || secret.length < MIN_JWT_SECRET_LENGTH || isPlaceholderSecret(secret)) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('JWT_SECRET env var is missing or uses the default placeholder. Set a strong secret.');
+      throw new Error(
+        `JWT_SECRET is missing, shorter than ${MIN_JWT_SECRET_LENGTH} chars, or an example placeholder. ` +
+        'Generate one with: openssl rand -base64 48',
+      );
     }
     return 'dev_only_secret_change_in_production';
   }
   return secret;
+}
+
+// Called at server startup (instrumentation.ts) so a bad secret stops the
+// container instead of surfacing later as failed logins.
+export function assertJwtSecretConfigured() {
+  getJwtSecret();
 }
 
 const SALT_ROUNDS = 10;

@@ -27,12 +27,7 @@ npm run dev                # http://localhost:3000
 node -e "require('ts-node').register({transpileOnly:true}); require('./prisma/seed.ts')"
 ```
 
-**Credenciales demo:**
-| Usuario | Email | Contraseña |
-|---|---|---|
-| Alex Sterling (demo) | alex@finanzasdev.com | test1234 |
-| Diego De la hoz | diego@finanzasdev.com | 1004360 |
-| Melissa Perez | melissa@finanzasdev.com | 108283 |
+⚠️ El seed **borra toda la base de datos** y se niega a correr con `NODE_ENV=production`. Crea el usuario demo `alex@finanzasdev.com`; su contraseña se toma de `SEED_DEMO_PASSWORD` o se genera al azar y se imprime en la consola.
 
 ---
 
@@ -95,9 +90,14 @@ docker compose -f docker-compose.prod.yml up -d
 
 ### 6. Inicializar BD (primera vez)
 
+Desde el servidor (la clave no viaja por internet):
+
 ```bash
-curl https://tudominio.com/api/seed?key=TU_SEED_KEY
+docker exec lumina_app wget -qO- "http://localhost:3000/api/seed/categorias?key=TU_SEED_KEY"
+docker exec lumina_app wget -qO- "http://localhost:3000/api/admin/setup?key=TU_SEED_KEY"
 ```
+
+`/api/admin/setup` crea el admin con `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` (obligatorias) y no cambia la contraseña de un admin existente salvo que se agregue `&resetPassword=1`.
 
 ---
 
@@ -211,7 +211,10 @@ curl https://tudominio.com/api/health
 | `POSTGRES_USER` | Usuario PostgreSQL | ✅ |
 | `POSTGRES_PASSWORD` | Contraseña PostgreSQL | ✅ |
 | `JWT_SECRET` | Secret para JWT (mín. 32 chars) | ✅ |
-| `SEED_KEY` | Clave para `/api/seed` | Recomendada |
+| `SEED_KEY` | Clave para `/api/seed/categorias` y `/api/admin/setup` | ✅ |
+| `ADMIN_EMAIL` | Email del administrador | ✅ |
+| `ADMIN_PASSWORD` | Contraseña del administrador (mín. 10 chars) | ✅ |
+| `ADMIN_NAME` | Nombre del administrador | Opcional |
 
 ---
 
@@ -219,7 +222,8 @@ curl https://tudominio.com/api/health
 
 ```
 ├── app/api/health/     → GET /api/health (Docker healthcheck)
-├── app/api/seed/       → GET /api/seed?key=... (inicialización BD)
+├── app/api/seed/categorias/ → GET ?key=... (categorías, idempotente)
+├── app/api/admin/setup/     → GET ?key=... (admin + clave de registro)
 ├── docker/entrypoint.sh
 ├── docker-compose.prod.yml
 ├── nginx/
