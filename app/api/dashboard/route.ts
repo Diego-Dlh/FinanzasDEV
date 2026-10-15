@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken, DEMO_USER_ID } from '@/lib/auth';
-import { addDaysISO, currentMonthISO, dateOnlyToUTC, monthRangeUTC, todayISO } from '@/lib/dates';
+import { addDaysISO, dateOnlyToUTC, todayISO } from '@/lib/dates';
 import { api } from '@/lib/http';
+import { NOT_CARD_PAYMENT, dashboardTotals } from '@/lib/finance';
 
 function calcHealthScore(
   monthlyIncome: number,
@@ -69,56 +70,49 @@ async function handleGet(request: Request) {
   try {
     // Calendar dates are stored as UTC midnight; "today" is Colombia's
     const today = todayISO();
-    const { start: startOfMonth, end: startOfNextMonth } = monthRangeUTC(currentMonthISO());
     const last7Days = Array.from({ length: 7 }, (_, i) => addDaysISO(today, i - 6));
     const sevenDaysAgo = dateOnlyToUTC(last7Days[0]);
     const tomorrow     = dateOnlyToUTC(addDaysISO(today, 1));
+    const week = { gte: sevenDaysAgo, lt: tomorrow };
+    // Card purchases count as spending on their date; card payments (abonos) don't
+    const cardInfo = { category: true, card: { select: { name: true } } } as const;
 
     const [
       accounts,
-      monthlyIncomes,
-      monthlyExpenses,
+      totals,
       debts,
       goals,
       recentIncomes,
       recentExpenses,
+      recentPurchases,
       cashFlowIncomes,
       cashFlowExpenses,
+      cashFlowPurchases,
       cards,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId, date: { gte: startOfMonth, lt: startOfNextMonth } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: startOfMonth, lt: startOfNextMonth } } }),
+      dashboardTotals(userId),
       prisma.debt.findMany({ where: { userId } }),
       prisma.goal.findMany({ where: { userId } }),
-      prisma.income.findMany({
-        where: { userId },
-        orderBy: { date: 'desc' },
-        take: 6,
-        include: { category: true },
-      }),
-      prisma.expense.findMany({
-        where: { userId },
-        orderBy: { date: 'desc' },
-        take: 6,
-        include: { category: true },
-      }),
-      // Cashflow: all incomes of the last 7 days — no take limit
-      prisma.income.findMany({ where: { userId, date: { gte: sevenDaysAgo, lt: tomorrow } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: sevenDaysAgo, lt: tomorrow } } }),
+      prisma.income.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 6, include: { category: true } }),
+      prisma.expense.findMany({ where: { userId, ...NOT_CARD_PAYMENT }, orderBy: { date: 'desc' }, take: 6, include: { category: true } }),
+      prisma.cardPurchase.findMany({ where: { userId }, orderBy: { date: 'desc' }, take: 6, include: cardInfo }),
+      // Cashflow: everything of the last 7 days — no take limit
+      prisma.income.findMany({ where: { userId, date: week } }),
+      prisma.expense.findMany({ where: { userId, date: week, ...NOT_CARD_PAYMENT } }),
+      prisma.cardPurchase.findMany({ where: { userId, date: week } }),
       prisma.creditCard.findMany({ where: { userId } }),
     ]);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const totalBalance        = (accounts as any[]).filter((a) => !a.hideFromTotal).reduce((s: number, a: any) => s + a.balance, 0);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const visibleAccountsCount = (accounts as any[]).filter((a) => !a.hideFromTotal).length;
-    const totalMonthlyIncome  = monthlyIncomes.reduce((s, i) => s + i.amount, 0);
-    const totalMonthlyExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
-    const cardDebt            = cards.reduce((s, c) => s + c.usedBalance, 0);
-    const totalDebt           = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
-    const netWorth            = totalBalance - totalDebt;
-    const healthScore         = calcHealthScore(totalMonthlyIncome, totalMonthlyExpenses, totalDebt, goals.length);
+    const visibleAccounts      = accounts.filter((a) => !a.hideFromTotal);
+    const totalBalance         = visibleAccounts.reduce((s, a) => s + a.balance, 0);   // "Saldo disponible"
+    const allAccountsBalance   = accounts.reduce((s, a) => s + a.balance, 0);
+    const visibleAccountsCount = visibleAccounts.length;
+    const cardDebt             = cards.reduce((s, c) => s + c.usedBalance, 0);
+    const totalDebt            = debts.reduce((s, d) => s + d.balance, 0) + cardDebt;
+    // Hiding an account only removes it from the available balance, not from what you own
+    const netWorth             = allAccountsBalance - totalDebt;
+    const healthScore          = calcHealthScore(totals.scoreBasis.income, totals.scoreBasis.expense, totalDebt, goals.length);
 
     const transactions = [
       ...recentIncomes.map((i) => ({
@@ -129,6 +123,10 @@ async function handleGet(request: Request) {
         id: e.id, title: e.description, category: e.category.name,
         amount: e.amount, type: 'expense' as const, date: e.date,
       })),
+      ...recentPurchases.map((p) => ({
+        id: p.id, title: `${p.description} · ${p.card.name}`, category: p.category.name,
+        amount: p.totalAmount, type: 'expense' as const, date: p.date,
+      })),
     ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 6);
@@ -137,13 +135,14 @@ async function handleGet(request: Request) {
     const cashFlow = last7Days.map((day) => ({
       name: weekdayLabel(day),
       income:  cashFlowIncomes.filter((i) => dayOf(i.date) === day).reduce((s, i) => s + i.amount, 0),
-      expense: cashFlowExpenses.filter((e) => dayOf(e.date) === day).reduce((s, e) => s + e.amount, 0),
+      expense: cashFlowExpenses.filter((e) => dayOf(e.date) === day).reduce((s, e) => s + e.amount, 0)
+             + cashFlowPurchases.filter((p) => dayOf(p.date) === day).reduce((s, p) => s + p.totalAmount, 0),
     }));
 
     return NextResponse.json({
       totalBalance,
-      monthlyIncome: totalMonthlyIncome,
-      monthlyExpenses: totalMonthlyExpenses,
+      monthlyIncome: totals.thisMonth.income,
+      monthlyExpenses: totals.thisMonth.expense,
       totalDebt,
       netWorth,
       healthScore,

@@ -35,7 +35,7 @@ interface Category {
   type: 'INCOME' | 'EXPENSE';
   isSystem: boolean;
   createdAt: string;
-  _count: { incomes: number; expenses: number; cardPurchases: number };
+  _count: { incomes: number; expenses: number; cardPurchases: number; budgets: number };
 }
 
 type AccountType = 'CASH' | 'BANK' | 'NEQUI' | 'DAVIPLATA' | 'CARD';
@@ -228,7 +228,7 @@ export default function AdminPage() {
   }
 
   async function deleteCategory(cat: Category) {
-    const total = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases;
+    const total = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases + cat._count.budgets;
     if (total > 0) {
       setCatError(`"${cat.name}" está en uso en ${total} registro(s) y no se puede eliminar.`);
       return;
@@ -451,7 +451,7 @@ export default function AdminPage() {
               </p>
             )}
             {filteredCats.map((cat) => {
-              const usage = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases;
+              const usage = cat._count.incomes + cat._count.expenses + cat._count.cardPurchases + cat._count.budgets;
               const isEditing = catEditId === cat.id;
               return (
                 <div key={cat.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 bg-surface-container-high">

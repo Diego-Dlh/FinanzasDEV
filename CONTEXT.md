@@ -196,7 +196,7 @@ enum AccountType { CASH | BANK | NEQUI | DAVIPLATA | CARD }
 
 **`Payment`** — FK: userId, debtId · campos: amount, paidAt
 
-**`Budget`** — campos: name, allocated, spent (default 0)
+**`Budget`** — campos: name, allocated, `categoryId` (categoría de gasto que sigue; una por presupuesto). `spent` es una columna heredada que ya no se lee ni se escribe: el gasto se calcula en `GET /api/presupuestos`
 
 **`Goal`** — campos: title, description, targetAmount, currentAmount (default 0), targetDate
 
@@ -271,7 +271,7 @@ Todas requieren `Authorization: Bearer <token>` excepto donde se indica.
 ### Dashboard
 | Ruta | Descripción |
 |------|-------------|
-| `GET /api/dashboard` | totalBalance (solo cuentas con `hideFromTotal: false`), monthlyIncome, monthlyExpenses, totalDebt (deudas + tarjetas), netWorth, healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Si DB falla → retorna MOCK_DASHBOARD con datos de ejemplo en COP** |
+| `GET /api/dashboard` | totalBalance ("Saldo disponible": solo cuentas con `hideFromTotal: false`), monthlyIncome, monthlyExpenses, totalDebt (deudas + tarjetas), netWorth (**todas** las cuentas − deudas), healthScore, transactions (últimas 6), cashFlow (7 días), accountsCount. **Gasto = gastos + compras con tarjeta; los abonos a tarjeta no suman** (`lib/finance.ts`). healthScore usa el promedio de los últimos 3 meses completos con datos (o el mes actual si no hay historial). Si la BD falla → 503 (los datos de ejemplo solo se sirven al usuario demo) |
 
 ### Ingresos / Gastos / Deudas / Presupuestos / Metas / Categorías
 GET de cada ruta retorna array vacío si DB no disponible.
@@ -290,7 +290,7 @@ GET de cada ruta retorna array vacío si DB no disponible.
 | `/api/alertas` | PUT | Body `{ markAllRead: true }` → marca todas como leídas |
 | `/api/alertas/[id]` | PUT | Marca alerta individual como leída |
 | `/api/alertas/[id]` | DELETE | Elimina alerta |
-| `/api/alertas/auto` | POST | Genera alertas automáticas de vencimiento. Busca deudas con `dueDate` en próximos 7 días (balance > 0) y tarjetas con `dueDay` en próximos 7 días (usedBalance > 0). Deduplicación por campo `type` (`vencimiento_deuda_<id>` / `vencimiento_tarjeta_<id>`): no crea si ya existe una del mismo tipo en los últimos 3 días. Retorna `{ ok, created }`. Silencia errores de DB. |
+| `/api/alertas/auto` | POST | Genera alertas automáticas de vencimiento. Busca deudas con `dueDate` en próximos 7 días (balance > 0) y tarjetas con `dueDay` en próximos 7 días (usedBalance > 0). También alerta las deudas **vencidas** con saldo. Una sola alerta por vencimiento: el `type` lleva el id y la fecha (`vencimiento_deuda_<id>_<fecha>`, `vencida_deuda_<id>_<fecha>`, `vencimiento_tarjeta_<id>_<fecha>`). No crea nada si el usuario apagó `Setting.notifications` (interruptor en Configuración). Retorna `{ ok, created }`. |
 
 ### Configuración
 | Ruta | Método | Descripción |
@@ -599,7 +599,7 @@ docker exec lumina_app npx prisma migrate status
 - **Balance de cuentas**: se actualiza atómicamente (`$transaction`) al crear/editar/eliminar ingresos y gastos
 - **Toast global** (`useToast()`): feedback de éxito/error en todas las páginas CRUD
 - **Ingresos**: resumen muestra total real del mes actual (no solo `MONTHLY`)
-- **Presupuestos**: barra de progreso usa gasto real del mes por categoría (matching por nombre, case-insensitive)
+- **Presupuestos**: cada uno sigue una categoría (`categoryId`); el gasto del mes (gastos + compras con tarjeta, calendario de Colombia) lo calcula el servidor
 - **Filtros avanzados en /ingresos**: búsqueda por texto (nombre/categoría/cuenta) + selector de mes dinámico; summary card refleja el período seleccionado
 - **Filtros avanzados en /gastos**: búsqueda por texto + selector de mes + filtro de categoría (los tres combinables); summary refleja total filtrado
 - **Exportar CSV desde /historial**: botón junto al buscador descarga las transacciones filtradas actuales con BOM UTF-8; nombre incluye período y fecha
@@ -671,3 +671,13 @@ Para entrar a la app sin base de datos: ir a /auth/login y usar el botón "Acces
 
 Espera la siguiente instrucción.
 ```
+
+---
+
+## 16. Qué cuenta como gasto (Fase 5)
+
+- Una **compra con tarjeta** cuenta completa en su fecha y categoría (no cuando se paga). Aplica a dashboard, flujo de caja, historial, presupuestos y `/gastos`.
+- El **abono a tarjeta** genera un `Expense` (categoría de sistema "Abono Tarjeta") solo para descontar la cuenta; **no suma como gasto** (filtro `NOT_CARD_PAYMENT` en `lib/finance.ts`) y no se lista en el historial.
+- Los **pagos de deuda** sí cuentan como gasto (una deuda no tiene registro de compra propio).
+- Tasas: las tasas se piden como **E.A.**; se convierten con `(1+EA)^(1/12) − 1` (`lib/finance-math.ts`).
+- `GET /api/admin/conciliacion` (solo lectura) compara cada saldo con la suma de sus movimientos para detectar descuadres.

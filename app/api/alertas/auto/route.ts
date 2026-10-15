@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { addDaysISO, addMonthsISO, currentMonthISO, dateOnlyToUTC, fmtDate, todayISO } from '@/lib/dates';
-import { api } from '@/lib/http';
+import { api, formatCOP } from '@/lib/http';
 
 // Day `day` of month `ym`, clamped to the month's last day (dueDay 31 in a 30-day month)
 function dueDateInMonth(ym: string, day: number): Date {
@@ -11,83 +11,79 @@ function dueDateInMonth(ym: string, day: number): Date {
   return new Date(Date.UTC(y, m - 1, Math.min(day, lastDay)));
 }
 
-const fmtCOP = (n: number) =>
-  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
 /**
  * POST /api/alertas/auto
- * Genera alertas para deudas y tarjetas que vencen en los próximos 7 días.
- * Usa el campo `type` como clave de deduplicación (vencimiento_deuda_<id>).
- * No crea duplicados si ya existe una alerta del mismo tipo en los últimos 3 días.
+ * Creates alerts for debts and cards due in the next 7 days, and for overdue debts.
+ * The alert `type` carries the item id and its due date, so there is exactly one alert
+ * per due date: calling this again (every login) never repeats it.
+ * Nothing is created when the user turned notifications off in their settings.
  */
 async function handlePost(request: Request) {
   const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
-  // Due dates are calendar dates (UTC midnight); "today" is Colombia's
-  const today   = todayISO();
-  const todayAt = dateOnlyToUTC(today);
-  const in7days = dateOnlyToUTC(addDaysISO(today, 7));
-  const ago3d   = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-
-  let created = 0;
-
   try {
-    // ── 1. Deudas con dueDate en los próximos 7 días y saldo > 0 ───────────────
-    const debts = await prisma.debt.findMany({
-      where: { userId, balance: { gt: 0 }, dueDate: { gte: todayAt, lte: in7days } },
-    });
-
-    for (const debt of debts) {
-      const alertType = `vencimiento_deuda_${debt.id}`;
-      const existing = await prisma.alert.findFirst({
-        where: { userId, type: alertType, createdAt: { gte: ago3d } },
-      });
-      if (!existing) {
-        const dueStr = fmtDate(debt.dueDate, { day: 'numeric', month: 'long' });
-        await prisma.alert.create({
-          data: {
-            userId,
-            type: alertType,
-            message: `Tu deuda "${debt.name}" vence el ${dueStr}. Saldo pendiente: ${fmtCOP(debt.balance)}`,
-          },
-        });
-        created++;
-      }
+    const setting = await prisma.setting.findUnique({ where: { userId } });
+    if (setting && !setting.notifications) {
+      return NextResponse.json({ ok: true, created: 0, skipped: 'notifications_off' });
     }
 
-    // ── 2. Tarjetas con dueDay en los próximos 7 días y saldo > 0 ──────────────
-    const cards = await prisma.creditCard.findMany({
-      where: { userId, usedBalance: { gt: 0 } },
-    });
+    // Due dates are calendar dates (UTC midnight); "today" is Colombia's
+    const today   = todayISO();
+    const todayAt = dateOnlyToUTC(today);
+    const in7days = dateOnlyToUTC(addDaysISO(today, 7));
+
+    const [upcomingDebts, overdueDebts, cards] = await Promise.all([
+      prisma.debt.findMany({ where: { userId, balance: { gt: 0 }, dueDate: { gte: todayAt, lte: in7days } } }),
+      prisma.debt.findMany({ where: { userId, balance: { gt: 0 }, dueDate: { lt: todayAt } } }),
+      prisma.creditCard.findMany({ where: { userId, usedBalance: { gt: 0 } } }),
+    ]);
+
+    const candidates: { type: string; message: string }[] = [];
+
+    for (const debt of upcomingDebts) {
+      candidates.push({
+        type: `vencimiento_deuda_${debt.id}_${ymd(debt.dueDate)}`,
+        message: `Tu deuda "${debt.name}" vence el ${fmtDate(debt.dueDate, { day: 'numeric', month: 'long' })}. Saldo pendiente: ${formatCOP(debt.balance)}`,
+      });
+    }
+
+    for (const debt of overdueDebts) {
+      candidates.push({
+        type: `vencida_deuda_${debt.id}_${ymd(debt.dueDate)}`,
+        message: `Tu deuda "${debt.name}" venció el ${fmtDate(debt.dueDate, { day: 'numeric', month: 'long', year: 'numeric' })} y aún tiene saldo: ${formatCOP(debt.balance)}`,
+      });
+    }
 
     for (const card of cards) {
-      // Próxima fecha de pago a partir del dueDay (hoy cuenta como próxima)
+      // Next payment date from dueDay (today counts as upcoming)
       let nextDue = dueDateInMonth(currentMonthISO(), card.dueDay);
       if (nextDue < todayAt) nextDue = dueDateInMonth(addMonthsISO(currentMonthISO(), 1), card.dueDay);
-
-      if (nextDue <= in7days) {
-        const alertType = `vencimiento_tarjeta_${card.id}`;
-        const existing = await prisma.alert.findFirst({
-          where: { userId, type: alertType, createdAt: { gte: ago3d } },
-        });
-        if (!existing) {
-          const dueStr = fmtDate(nextDue, { day: 'numeric', month: 'long' });
-          await prisma.alert.create({
-            data: {
-              userId,
-              type: alertType,
-              message: `Tu tarjeta "${card.name}" tiene fecha de pago el ${dueStr}. Saldo actual: ${fmtCOP(card.usedBalance)}`,
-            },
-          });
-          created++;
-        }
-      }
+      if (nextDue > in7days) continue;
+      candidates.push({
+        type: `vencimiento_tarjeta_${card.id}_${ymd(nextDue)}`,
+        message: `Tu tarjeta "${card.name}" tiene fecha de pago el ${fmtDate(nextDue, { day: 'numeric', month: 'long' })}. Saldo actual: ${formatCOP(card.usedBalance)}`,
+      });
     }
 
-    return NextResponse.json({ ok: true, created });
-  } catch {
-    // Silencioso — las alertas automáticas no deben romper la app
+    if (candidates.length === 0) return NextResponse.json({ ok: true, created: 0 });
+
+    const existing = await prisma.alert.findMany({
+      where: { userId, type: { in: candidates.map((c) => c.type) } },
+      select: { type: true },
+    });
+    const already = new Set(existing.map((a) => a.type));
+    const fresh = candidates.filter((c) => !already.has(c.type));
+    if (fresh.length > 0) {
+      await prisma.alert.createMany({ data: fresh.map((c) => ({ userId, type: c.type, message: c.message })) });
+    }
+
+    return NextResponse.json({ ok: true, created: fresh.length });
+  } catch (error) {
+    // Silent — automatic alerts must never break the app
+    console.error('[alertas/auto]', error);
     return NextResponse.json({ ok: false, created: 0 });
   }
 }

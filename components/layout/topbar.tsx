@@ -30,6 +30,7 @@ export function TopBar({ title }: { title: string }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationsOn, setNotificationsOn] = useState(true);
   const [pwSuccess, setPwSuccess] = useState('');
   const [pwError, setPwError] = useState('');
 
@@ -53,6 +54,24 @@ export function TopBar({ title }: { title: string }) {
     window.addEventListener(ALERTS_REFRESH_EVENT, loadAlerts);
     return () => window.removeEventListener(ALERTS_REFRESH_EVENT, loadAlerts);
   }, [user]);
+
+  // Load the automatic-alerts preference when the settings modal opens
+  useEffect(() => {
+    if (!showSettings) return;
+    api.get<{ setting: { notifications: boolean } }>('/configuracion')
+      .then((res) => setNotificationsOn(res.setting.notifications))
+      .catch(() => {});
+  }, [showSettings]);
+
+  async function handleNotificationsToggle() {
+    const next = !notificationsOn;
+    setNotificationsOn(next);
+    try {
+      await api.put('/configuracion', { notifications: next });
+    } catch {
+      setNotificationsOn(!next); // roll back if the server rejected it
+    }
+  }
 
   function handleLogout() {
     logout();
@@ -211,6 +230,37 @@ export function TopBar({ title }: { title: string }) {
                   <span
                     className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
                       isDark ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Automatic alerts */}
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.25em] text-on-surface-variant mb-3">Notificaciones</p>
+              <div className="flex items-center justify-between rounded-2xl bg-surface-container-low px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <Bell size={18} className={notificationsOn ? 'text-primary' : 'text-on-surface-variant'} />
+                  <div>
+                    <p className="text-sm font-medium text-on-surface">Alertas de vencimiento</p>
+                    <p className="text-xs text-on-surface-variant">
+                      {notificationsOn ? 'Te avisamos de deudas y tarjetas por vencer' : 'No se generan alertas automáticas'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleNotificationsToggle}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                    notificationsOn ? 'bg-secondary' : 'bg-surface-container-highest'
+                  }`}
+                  aria-checked={notificationsOn}
+                  aria-label="Alertas de vencimiento"
+                  role="switch"
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      notificationsOn ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { expenseSchema } from '@/lib/validators';
 import { api, errorResponse, readJson } from '@/lib/http';
-import { validateCategory } from '@/lib/categories';
+import { SYSTEM_CATEGORIES, validateCategory } from '@/lib/categories';
 import { findLinkedExpenseIds } from '@/lib/expenseLinks';
 
 async function handleGet(request: Request) {
@@ -12,16 +12,32 @@ async function handleGet(request: Request) {
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   try {
-    const expenses = await prisma.expense.findMany({
-      where: { userId },
-      orderBy: { date: 'desc' },
-      include: { category: true, account: true },
-    });
-    // `linked`: created by a debt/card payment, so it can't be edited on its own
+    const [expenses, cardPurchases] = await Promise.all([
+      prisma.expense.findMany({
+        where: { userId },
+        orderBy: { date: 'desc' },
+        include: { category: true, account: true },
+      }),
+      // Card purchases count as spending on their own date; they are managed in /tarjetas
+      prisma.cardPurchase.findMany({
+        where: { userId },
+        orderBy: { date: 'desc' },
+        include: { category: true, card: { select: { id: true, name: true } } },
+      }),
+    ]);
+    // `linked`: created by a debt/card payment, so it can't be edited on its own.
+    // `transfer`: a card payment (abono) — moves money to the card debt, not new spending.
     const linked = await findLinkedExpenseIds(expenses.map((e) => e.id));
-    return NextResponse.json({ expenses: expenses.map((e) => ({ ...e, linked: linked.has(e.id) })) });
+    return NextResponse.json({
+      expenses: expenses.map((e) => ({
+        ...e,
+        linked: linked.has(e.id),
+        transfer: e.category.name === SYSTEM_CATEGORIES.cardPayment.name,
+      })),
+      cardPurchases,
+    });
   } catch {
-    return NextResponse.json({ expenses: [] });
+    return NextResponse.json({ expenses: [], cardPurchases: [] });
   }
 }
 

@@ -268,14 +268,15 @@
 - **Hallazgo durante las pruebas:** `DELETE /ingresos/[id]` y las ediciones simultáneas de ingresos/gastos descontaban el saldo varias veces (4 borrados simultáneos → saldo −199.877 en vez de −49.877). Corregido con `SELECT … FOR UPDATE` dentro de la transacción (`lib/rowLocks.ts`).
 
 ### Fase 5 — Lógica financiera (PR 5)
-- [ ] **F1** Patrimonio con todas las cuentas.
-- [ ] **F2** Salud financiera con ingresos recurrentes o promedio.
-- [ ] **F3/F4** Conversión de E.A. a tasa mensual y soporte para tasa 0 %.
-- [ ] **F5** Corregir la calculadora de interés compuesto con aportes.
-- [ ] **F6** `Budget.categoryId` y gasto por defecto 0.
-- [ ] **F8/F9** ~~Fechas de vencimiento correctas~~ (F8 resuelto en Fase 2: `dueDay` 29-31 se ajusta al último día del mes), deudas vencidas, respetar `notifications`.
-- [ ] **A8** Endpoint de recálculo de saldos.
-- [ ] **F7** (decisión de producto) Cómo contar las compras con tarjeta.
+- [x] **F1** Patrimonio con **todas** las cuentas (ocultar una cuenta ya no lo baja; solo afecta al "Saldo disponible").
+- [x] **F2** Salud financiera con el **promedio de los últimos 3 meses completos** con datos (o el mes actual si aún no hay historial). Las tarjetas del dashboard siguen mostrando el mes actual. *Decisión del usuario.*
+- [x] **F3/F4** Tasa E.A. → mensual `(1+EA)^(1/12) − 1` en la calculadora de deudas, cuota de préstamo y meta de ahorro; la tasa 0 % ya calcula (`lib/finance-math.ts`, probado contra simulación mes a mes).
+- [x] **F5** Interés compuesto con aportes: se simula con el factor de crecimiento mensual (antes el aporte se capitalizaba por periodo y con capitalización anual/semestral/trimestral los intereses salían **negativos**). Admite capital 0 y tasa 0 %. Además se corrigió la **meta de ahorro**, que ignoraba que lo ya ahorrado también rinde.
+- [x] **F6** `Budget.categoryId` (migración `20261017000000_budget_category`, vincula los existentes por nombre). El gasto del mes lo calcula el servidor (gastos + compras con tarjeta de esa categoría); sin categoría o sin gastos = 0 (ya no se usa el `spent` guardado). Una categoría por presupuesto; el admin no puede borrar categorías con presupuestos.
+- [x] **F7** *(decisión del usuario)* **Una compra con tarjeta es gasto en su fecha y categoría; el abono no suma** (solo mueve plata de la cuenta a la deuda). Aplica a dashboard, flujo de caja, historial (lista, totales, gráficas), presupuestos y `/gastos` (compras como filas de solo lectura, abonos marcados "no suma como gasto"). Los pagos de deuda siguen contando como gasto.
+- [x] **F8/F9** `dueDay` 29-31 al último día del mes (Fase 2); **una sola alerta por vencimiento** (el tipo lleva la fecha); alerta de **deuda vencida**; `Setting.notifications` se respeta y ahora hay un interruptor en Configuración.
+- [x] **A8** `GET /api/admin/conciliacion[?userId=]` (solo lectura): por cuenta, saldo vs. suma de movimientos y el `adjustment` que ningún movimiento explica. **No corrige automáticamente**: la app no guarda saldo inicial, así que recalcular borraría ajustes manuales legítimos.
+- Adicional: el contador de `/gastos` decía "transacciónes".
 
 ### Fase 6 — Infraestructura y base de datos (PR 6)
 - [ ] **S3** Let's Encrypt; HSTS sin `preload` hasta tener un certificado válido; unificar el dominio.

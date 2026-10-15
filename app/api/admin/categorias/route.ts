@@ -11,7 +11,7 @@ async function handleGet(request: Request) {
   const categories = await prisma.category.findMany({
     orderBy: { name: 'asc' },
     include: {
-      _count: { select: { incomes: true, expenses: true, cardPurchases: true } },
+      _count: { select: { incomes: true, expenses: true, cardPurchases: true, budgets: true } },
     },
   });
 
@@ -36,7 +36,7 @@ async function handlePost(request: Request) {
 
   const category = await prisma.category.create({
     data: { name: name.trim(), type },
-    include: { _count: { select: { incomes: true, expenses: true, cardPurchases: true } } },
+    include: { _count: { select: { incomes: true, expenses: true, cardPurchases: true, budgets: true } } },
   });
 
   return NextResponse.json({ category }, { status: 201 });

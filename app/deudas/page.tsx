@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, CreditCard, Pencil, DollarSign, Calculator, ChevronRight } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { loanPayment, monthlyRateFromEA, parseNum } from '@/lib/finance-math';
 import { addDaysISO, fmtDate, toDateInput, todayISO } from '@/lib/dates';
 import { debtSchema, type DebtInput, paymentSchema, type PaymentInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
@@ -169,12 +170,14 @@ export default function DebtsPage() {
 
   // Calculator logic
   const calcResult = useMemo(() => {
-    const P = parseFloat(calcMonto);
-    const tasaRaw = parseFloat(calcTasa);
-    const n = parseInt(calcMeses);
-    if (!P || !tasaRaw || !n || P <= 0 || tasaRaw <= 0 || n <= 0) return null;
-    const r = calcTipoTasa === 'anual' ? tasaRaw / 100 / 12 : tasaRaw / 100;
-    const cuota = r === 0 ? P / n : (P * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+    const P = parseNum(calcMonto);
+    const tasaRaw = parseNum(calcTasa);
+    const n = parseNum(calcMeses);
+    // A 0% rate is a valid loan; only empty or invalid fields hide the result
+    if (P === null || P <= 0 || tasaRaw === null || tasaRaw < 0 || n === null || n < 1 || !Number.isInteger(n)) return null;
+    // 'anual' is effective annual (E.A.): convert it instead of dividing by 12
+    const r = calcTipoTasa === 'anual' ? monthlyRateFromEA(tasaRaw) : tasaRaw / 100;
+    const cuota = loanPayment(P, r, n);
     const totalPagar = cuota * n;
     const totalIntereses = totalPagar - P;
     return { cuota, totalPagar, totalIntereses };

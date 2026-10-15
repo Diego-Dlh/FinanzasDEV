@@ -5,23 +5,25 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, Target, Pencil, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
-import { addDaysISO, currentMonthISO, toDateInput, todayISO } from '@/lib/dates';
+import { addDaysISO, toDateInput, todayISO } from '@/lib/dates';
 import { budgetSchema, type BudgetInput, goalSchema, type GoalInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
 import { Modal } from '@/components/ui/modal';
 import { PageSpinner } from '@/components/ui/spinner';
-import { Input, Field, Btn } from '@/components/ui/field';
+import { Input, SelectField, Field, Btn } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast';
 
-interface Budget { id: string; name: string; allocated: number; spent: number }
+// `spent` is computed by the API: this month's spending in the budget's category
+// (expenses + card purchases). Budgets with no category are legacy ones to relink.
+interface Budget {
+  id: string; name: string; allocated: number; spent: number;
+  categoryId: string | null; category: { id: string; name: string } | null;
+}
+interface Category { id: string; name: string; type: string }
 interface Goal {
   id: string; title: string; description: string;
   targetAmount: number; currentAmount: number; targetDate: string;
-}
-interface Expense {
-  id: string; amount: number; date: string;
-  category: { name: string };
 }
 
 function fmt(n: number) {
@@ -48,7 +50,7 @@ export default function BudgetPage() {
   const toast = useToast();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -59,7 +61,7 @@ export default function BudgetPage() {
   const [progressAmount, setProgressAmount] = useState(0);
   const [error, setError] = useState('');
 
-  const { register: regB, handleSubmit: handleB, reset: resetB, formState: { errors: errB, isSubmitting: submB } } =
+  const { register: regB, handleSubmit: handleB, reset: resetB, setValue: setValueB, getValues: getValuesB, formState: { errors: errB, isSubmitting: submB } } =
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     useForm<BudgetInput>({ resolver: zodResolver(budgetSchema) as any });
 
@@ -69,14 +71,14 @@ export default function BudgetPage() {
 
   async function loadData() {
     try {
-      const [b, g, exp] = await Promise.all([
+      const [b, g, cat] = await Promise.all([
         api.get<{ budgets: Budget[] }>('/presupuestos'),
         api.get<{ goals: Goal[] }>('/metas'),
-        api.get<{ expenses: Expense[] }>('/gastos'),
+        api.get<{ categories: Category[] }>('/categorias'),
       ]);
       setBudgets(b.budgets);
       setGoals(g.goals);
-      setExpenses(exp.expenses);
+      setCategories(cat.categories.filter((c) => c.type === 'EXPENSE'));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -162,16 +164,6 @@ export default function BudgetPage() {
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
-  // Gastos del mes actual agrupados por categoría (lowercase para matching).
-  // e.date es una fecha de calendario en UTC: su mes es el prefijo 'YYYY-MM'.
-  const thisMonth = currentMonthISO();
-  const spentByCategory: Record<string, number> = {};
-  for (const e of expenses) {
-    if (!e.date.startsWith(thisMonth)) continue;
-    const key = e.category.name.toLowerCase();
-    spentByCategory[key] = (spentByCategory[key] ?? 0) + e.amount;
-  }
-
   return (
     <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
       <TopBar title="Presupuestos y Metas" />
@@ -203,8 +195,7 @@ export default function BudgetPage() {
           ) : (
             <div className="space-y-3">
               {budgets.map((b) => {
-                const realSpent = spentByCategory[b.name.toLowerCase()] ?? null;
-                const displaySpent = realSpent !== null ? realSpent : b.spent;
+                const displaySpent = b.spent;
                 const pct = b.allocated > 0 ? Math.min((displaySpent / b.allocated) * 100, 100) : 0;
                 const over = displaySpent > b.allocated;
                 const warning = pct >= 80 && !over;
@@ -219,17 +210,18 @@ export default function BudgetPage() {
                           <p className="font-semibold text-on-surface">{b.name}</p>
                           <p className="text-xs text-on-surface-variant">
                             {fmt(displaySpent)} / {fmt(b.allocated)}
-                            {realSpent !== null && (
-                              <span className="ml-1 text-primary/70">(real)</span>
-                            )}
+                            {b.category && <span className="ml-1 text-primary/70">· {b.category.name}</span>}
                           </p>
+                          {!b.category && (
+                            <p className="text-xs text-error">Sin categoría: edítalo para elegir cuál gasto cuenta.</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className={`text-xs font-semibold px-2 py-1 rounded-full ${over ? 'bg-error/10 text-error' : warning ? 'bg-amber-50 text-amber-600' : 'bg-secondary/10 text-secondary'}`}>
                           {over ? 'Excedido' : warning ? 'Cuidado' : 'OK'}
                         </span>
-                        <button onClick={() => { setEditBudget(b); resetB({ name: b.name, allocated: b.allocated }); setShowBudgetModal(true); }} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container transition text-on-surface-variant">
+                        <button onClick={() => { setEditBudget(b); resetB({ name: b.name, allocated: b.allocated, categoryId: b.categoryId ?? '' }); setShowBudgetModal(true); }} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container transition text-on-surface-variant">
                           <Pencil size={14} />
                         </button>
                         <button onClick={() => deleteBudget(b.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-error-container transition text-on-surface-variant hover:text-error">
@@ -332,10 +324,23 @@ export default function BudgetPage() {
 
       {/* Budget Modal */}
       {showBudgetModal && (
-        <Modal title={editBudget ? 'Editar Presupuesto' : 'Nuevo Presupuesto'} subtitle="Define cuánto quieres gastar por categoría" onClose={() => setShowBudgetModal(false)}>
+        <Modal title={editBudget ? 'Editar Presupuesto' : 'Nuevo Presupuesto'} subtitle="Define cuánto quieres gastar al mes en una categoría (cuentan tus gastos y compras con tarjeta)" onClose={() => setShowBudgetModal(false)}>
           <form onSubmit={handleB(onSubmitBudget)} className="space-y-4">
-            <Field label="Categoría / Nombre" error={errB.name?.message} required>
-              <Input {...regB('name')} placeholder="ej. Alimentación" />
+            <Field label="Categoría de gasto" error={errB.categoryId?.message} required>
+              <SelectField
+                {...regB('categoryId', {
+                  // Suggest the category's name when the budget has no name yet
+                  onChange: (e) => {
+                    if (!getValuesB('name')) setValueB('name', categories.find((c) => c.id === e.target.value)?.name ?? '');
+                  },
+                })}
+              >
+                <option value="">Seleccionar...</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </SelectField>
+            </Field>
+            <Field label="Nombre" error={errB.name?.message} required>
+              <Input {...regB('name')} placeholder="ej. Comida del mes" />
             </Field>
             <Field label="Presupuesto asignado" error={errB.allocated?.message} required>
               <Input {...regB('allocated', { valueAsNumber: true })} type="number" step="0.01" placeholder="0.00" />

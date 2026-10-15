@@ -63,6 +63,7 @@ export const debtUpdateSchema = debtSchema.partial().extend({
 export const budgetSchema = z.object({
   name: z.string().min(2, 'El nombre es requerido'),
   allocated: z.number().positive('El monto debe ser positivo'),
+  categoryId: z.string().min(1, 'Elige la categoría del presupuesto'),
 });
 
 const goalFields = {

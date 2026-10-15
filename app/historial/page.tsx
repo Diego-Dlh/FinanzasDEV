@@ -99,7 +99,8 @@ export default function HistorialPage() {
         categories.length ? Promise.resolve({ categories }) : api.get<{ categories: Category[] }>('/categorias?all=1'),
       ]);
       setData(histRes);
-      if (!categories.length) setCategories((catRes as { categories: Category[] }).categories);
+      // Card payments aren't listed (the purchase already counts), so don't offer them as a filter
+      if (!categories.length) setCategories((catRes as { categories: Category[] }).categories.filter((c) => c.name !== 'Abono Tarjeta'));
     } catch { /* silencioso */ }
     finally { setLoading(false); }
   }
