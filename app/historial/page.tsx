@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { addDaysISO, addMonthsISO, dateOnlyToUTC, fmtDate, todayISO } from '@/lib/dates';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
 import { PageSpinner } from '@/components/ui/spinner';
@@ -42,26 +43,22 @@ const PERIODS = [
 ];
 type Period = typeof PERIODS[number]['key'];
 
+// Calendar ranges ('YYYY-MM-DD', `to` inclusive) based on today in Colombia
 function periodToRange(p: Period): { from: string; to: string } {
-  const now = new Date();
-  const pad = (d: Date) => d.toISOString().split('T')[0];
-  if (p === 'month') {
-    return { from: pad(new Date(now.getFullYear(), now.getMonth(), 1)), to: pad(now) };
-  }
+  const today = todayISO();
+  const month = today.slice(0, 7);
+  const monthsAgo = (n: number) => {
+    const d = dateOnlyToUTC(today);
+    d.setUTCMonth(d.getUTCMonth() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  if (p === 'month') return { from: `${month}-01`, to: today };
   if (p === 'last-month') {
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end   = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { from: pad(start), to: pad(end) };
+    return { from: `${addMonthsISO(month, -1)}-01`, to: addDaysISO(`${month}-01`, -1) };
   }
-  if (p === '3m') {
-    const d = new Date(now); d.setMonth(d.getMonth() - 3);
-    return { from: pad(d), to: pad(now) };
-  }
-  if (p === '6m') {
-    const d = new Date(now); d.setMonth(d.getMonth() - 6);
-    return { from: pad(d), to: pad(now) };
-  }
-  return { from: pad(new Date(now.getFullYear(), 0, 1)), to: pad(now) };
+  if (p === '3m') return { from: monthsAgo(3), to: today };
+  if (p === '6m') return { from: monthsAgo(6), to: today };
+  return { from: `${today.slice(0, 4)}-01-01`, to: today };
 }
 
 function fmtMonth(key: string) {
@@ -111,7 +108,7 @@ export default function HistorialPage() {
     if (filtered.length === 0) return;
     const headers = ['Fecha', 'Tipo', 'Descripción', 'Categoría', 'Cuenta', 'Monto COP'];
     const rows = filtered.map((t) => [
-      new Date(t.date).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      fmtDate(t.date, { day: '2-digit', month: '2-digit', year: 'numeric' }),
       t.type === 'INCOME' ? 'Ingreso' : 'Gasto',
       t.label,
       t.category,
@@ -126,7 +123,7 @@ export default function HistorialPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const dateStr = new Date().toISOString().split('T')[0];
+    const dateStr = todayISO();
     const periodLabel = PERIODS.find((p) => p.key === period)?.label.toLowerCase().replace(' ', '-') ?? period;
     a.download = `lumina-historial-${periodLabel}-${dateStr}.csv`;
     a.click();
@@ -378,8 +375,7 @@ function SummaryCard({
 
 function TransactionRow({ t }: { t: Transaction }) {
   const isIncome = t.type === 'INCOME';
-  const date = new Date(t.date);
-  const dateStr = date.toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+  const dateStr = fmtDate(t.date);
 
   return (
     <div className="glass-card rounded-[20px] px-4 py-3.5 shadow-card flex items-center gap-3">

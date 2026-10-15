@@ -11,6 +11,8 @@ import { changePasswordSchema, type ChangePasswordInput } from '@/lib/validators
 import { Modal } from '@/components/ui/modal';
 import { Field, Input, Btn } from '@/components/ui/field';
 
+export const ALERTS_REFRESH_EVENT = 'lumina:alerts-refresh';
+
 interface Alert {
   id: string;
   message: string;
@@ -36,15 +38,20 @@ export function TopBar({ title }: { title: string }) {
     resolver: zodResolver(changePasswordSchema) as any,
   });
 
-  // Load alerts + unread count on mount
+  // Load alerts + unread count on mount, and again when new alerts are generated
   useEffect(() => {
     if (!user) return;
-    api.get<{ alerts: Alert[]; unreadCount: number }>('/alertas')
-      .then((res) => {
-        setAlerts(res.alerts);
-        setUnreadCount(res.unreadCount);
-      })
-      .catch(() => {});
+    const loadAlerts = () => {
+      api.get<{ alerts: Alert[]; unreadCount: number }>('/alertas')
+        .then((res) => {
+          setAlerts(res.alerts);
+          setUnreadCount(res.unreadCount);
+        })
+        .catch(() => {});
+    };
+    loadAlerts();
+    window.addEventListener(ALERTS_REFRESH_EVENT, loadAlerts);
+    return () => window.removeEventListener(ALERTS_REFRESH_EVENT, loadAlerts);
   }, [user]);
 
   function handleLogout() {

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, CreditCard, Pencil, DollarSign, Calculator, ChevronRight } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { addDaysISO, fmtDate, toDateInput, todayISO } from '@/lib/dates';
 import { debtSchema, type DebtInput, paymentSchema, type PaymentInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -80,7 +81,7 @@ export default function DebtsPage() {
 
   function openAdd() {
     setEditTarget(null);
-    resetDebt({ dueDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0] });
+    resetDebt({ dueDate: addDaysISO(todayISO(), 365) });
     setShowDebtModal(true);
   }
 
@@ -89,7 +90,7 @@ export default function DebtsPage() {
     resetDebt({
       name: debt.name, entity: debt.entity, balance: debt.balance,
       interestRate: debt.interestRate, minPayment: debt.minPayment,
-      dueDate: new Date(debt.dueDate).toISOString().split('T')[0],
+      dueDate: toDateInput(debt.dueDate),
     });
     setShowDebtModal(true);
   }
@@ -330,7 +331,7 @@ export default function DebtsPage() {
                       <div className="text-right text-sm text-on-surface-variant space-y-1">
                         <p className="font-semibold text-on-surface">{debt.interestRate}% E.A.</p>
                         <p>Mín: {fmt(debt.minPayment)}</p>
-                        <p className="text-xs">{new Date(debt.dueDate).toLocaleDateString('es-CO', { month: 'short', year: 'numeric' })}</p>
+                        <p className="text-xs">{fmtDate(debt.dueDate, { month: 'short', year: 'numeric' })}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-4">

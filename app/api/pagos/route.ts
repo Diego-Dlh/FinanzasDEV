@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { paymentSchema } from '@/lib/validators';
+import { dateOnlyToUTC, todayISO } from '@/lib/dates';
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
           categoryId: cat.id,
           description: `Pago: ${debt.name} (${debt.entity})`,
           amount,
-          date: new Date(),
+          date: dateOnlyToUTC(todayISO()), // calendar date, like user-entered expenses
           frequency: 'ONE_TIME',
         },
       });

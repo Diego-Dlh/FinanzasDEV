@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, TrendingDown, Pencil, Search } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { currentMonthISO, fmtDate, toDateInput, todayISO } from '@/lib/dates';
 import { expenseSchema, type ExpenseInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -46,7 +47,7 @@ export default function ExpensesPage() {
   const [filterCat, setFilterCat] = useState('');
   const [error, setError] = useState('');
 
-  const currentMonth = new Date().toISOString().substring(0, 7);
+  const currentMonth = currentMonthISO();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [search, setSearch] = useState('');
 
@@ -100,7 +101,7 @@ export default function ExpensesPage() {
 
   function openAdd() {
     setEditTarget(null);
-    reset({ date: new Date().toISOString().split('T')[0], frequency: 'ONE_TIME' });
+    reset({ date: todayISO(), frequency: 'ONE_TIME' });
     setShowModal(true);
   }
 
@@ -111,7 +112,7 @@ export default function ExpensesPage() {
       amount: expense.amount,
       categoryId: expense.category.id,
       accountId: expense.account.id,
-      date: new Date(expense.date).toISOString().split('T')[0],
+      date: toDateInput(expense.date),
       frequency: expense.frequency as ExpenseInput['frequency'],
     });
     setShowModal(true);
@@ -243,7 +244,7 @@ export default function ExpensesPage() {
                       {expense.category.name} · {frequencyLabels[expense.frequency] ?? expense.frequency}
                     </p>
                     <p className="text-xs text-on-surface-variant">
-                      {new Date(expense.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {fmtDate(expense.date)}
                     </p>
                   </div>
                 </div>

@@ -234,12 +234,13 @@
 - [ ] **Pendiente manual:** las credenciales antiguas siguen en el **historial de git**. Rótalas (Fase 0) y, si el repo será público, límpialo con `git filter-repo`.
 
 ### Fase 2 — Funcionalidad rota y datos engañosos (PR 2)
-- [ ] **C6** Corregir la URL de `/alertas/auto`.
-- [ ] **C7** Quitar el mock del dashboard en producción (mantenerlo solo para el demo).
-- [ ] **D1** Helper `fmtDate` con `timeZone: 'UTC'` en todas las vistas.
-- [ ] **D2** Helper `todayLocal()` / `currentMonthLocal()` para valores por defecto y filtros.
-- [ ] **D3** `TZ=America/Bogota` en Dockerfile/compose/Render (o rangos con zona horaria explícita).
-- [ ] **D4** Corregir la comparación de mes en presupuestos.
+- [x] **C6** Corregir la URL de `/alertas/auto`; la campana se refresca cuando se crean alertas.
+- [x] **C7** Quitar el mock del dashboard en producción (solo para el usuario demo); 503 + pantalla de error con "Reintentar".
+- [x] **D1** Helper `fmtDate` con `timeZone: 'UTC'` en todas las vistas (`lib/dates.ts`).
+- [x] **D2** Helpers `todayISO()` / `currentMonthISO()` (calendario de Colombia) para valores por defecto y filtros.
+- [x] **D3** Rangos con zona horaria explícita (`America/Bogota`) en dashboard, historial, alertas y stats; no depende del `TZ` del servidor. El gasto que genera un pago de deuda se guarda con fecha de calendario.
+- [x] **D4** Corregir la comparación de mes en presupuestos.
+- Nota: los gastos de pagos de deuda creados **antes** de este cambio guardaron la hora real; los hechos entre 19:00 y 24:00 (hora Colombia) se ven un día después. En el homelab (BD nueva) no aplica.
 
 ### Fase 3 — Integridad de saldos (PR 3)
 - [ ] **A1** Pagos y abonos atómicos (validación dentro de la transacción + `increment`/`decrement`); deshabilitar el botón al enviar.
@@ -269,7 +270,7 @@
 - [ ] **F3/F4** Conversión de E.A. a tasa mensual y soporte para tasa 0 %.
 - [ ] **F5** Corregir la calculadora de interés compuesto con aportes.
 - [ ] **F6** `Budget.categoryId` y gasto por defecto 0.
-- [ ] **F8/F9** Fechas de vencimiento correctas, deudas vencidas, respetar `notifications`.
+- [ ] **F8/F9** ~~Fechas de vencimiento correctas~~ (F8 resuelto en Fase 2: `dueDay` 29-31 se ajusta al último día del mes), deudas vencidas, respetar `notifications`.
 - [ ] **A8** Endpoint de recálculo de saldos.
 - [ ] **F7** (decisión de producto) Cómo contar las compras con tarjeta.
 

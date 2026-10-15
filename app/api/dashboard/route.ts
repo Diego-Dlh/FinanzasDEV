@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { addDaysISO, currentMonthISO, dateOnlyToUTC, monthRangeUTC, todayISO } from '@/lib/dates';
+
+// Token user created by /api/demo-login; it has no rows in the database
+const DEMO_USER_ID = 'demo-user-id';
 
 function calcHealthScore(
   monthlyIncome: number,
@@ -29,42 +33,48 @@ function calcHealthScore(
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-const MOCK_DASHBOARD = {
-  totalBalance: 5_500_000,
-  monthlyIncome: 5_500_000,
-  monthlyExpenses: 2_800_000,
-  totalDebt: 1_200_000,
-  netWorth: 4_300_000,
-  healthScore: 72,
-  transactions: [
-    { id: '1', title: 'Salario', category: 'Salario', amount: 5_500_000, type: 'income' as const, date: new Date().toISOString() },
-    { id: '2', title: 'Arriendo', category: 'Vivienda', amount: 1_200_000, type: 'expense' as const, date: new Date().toISOString() },
-    { id: '3', title: 'Supermercado', category: 'Alimentación', amount: 450_000, type: 'expense' as const, date: new Date().toISOString() },
-  ],
-  cashFlow: Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return {
-      name: d.toLocaleDateString('es-CO', { weekday: 'short' }),
+function weekdayLabel(ymd: string) {
+  return dateOnlyToUTC(ymd).toLocaleDateString('es-CO', { weekday: 'short', timeZone: 'UTC' });
+}
+
+function mockDashboard() {
+  const today = dateOnlyToUTC(todayISO()).toISOString();
+  return {
+    totalBalance: 5_500_000,
+    monthlyIncome: 5_500_000,
+    monthlyExpenses: 2_800_000,
+    totalDebt: 1_200_000,
+    netWorth: 4_300_000,
+    healthScore: 72,
+    transactions: [
+      { id: '1', title: 'Salario', category: 'Salario', amount: 5_500_000, type: 'income' as const, date: today },
+      { id: '2', title: 'Arriendo', category: 'Vivienda', amount: 1_200_000, type: 'expense' as const, date: today },
+      { id: '3', title: 'Supermercado', category: 'Alimentación', amount: 450_000, type: 'expense' as const, date: today },
+    ],
+    cashFlow: Array.from({ length: 7 }, (_, i) => ({
+      name: weekdayLabel(addDaysISO(todayISO(), i - 6)),
       income: i === 0 ? 5_500_000 : 0,
       expense: i === 1 ? 1_200_000 : i === 3 ? 450_000 : 0,
-    };
-  }),
-  accountsCount: 3,
-};
+    })),
+    accountsCount: 3,
+  };
+}
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization');
   const userId = authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
+  // Sample data is only for the demo login; a real user must never see it
+  if (userId === DEMO_USER_ID) return NextResponse.json(mockDashboard());
+
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 6);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
+    // Calendar dates are stored as UTC midnight; "today" is Colombia's
+    const today = todayISO();
+    const { start: startOfMonth, end: startOfNextMonth } = monthRangeUTC(currentMonthISO());
+    const last7Days = Array.from({ length: 7 }, (_, i) => addDaysISO(today, i - 6));
+    const sevenDaysAgo = dateOnlyToUTC(last7Days[0]);
+    const tomorrow     = dateOnlyToUTC(addDaysISO(today, 1));
 
     const [
       accounts,
@@ -79,8 +89,8 @@ export async function GET(request: Request) {
       cards,
     ] = await Promise.all([
       prisma.account.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId, date: { gte: startOfMonth, lte: endOfMonth } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: startOfMonth, lte: endOfMonth } } }),
+      prisma.income.findMany({ where: { userId, date: { gte: startOfMonth, lt: startOfNextMonth } } }),
+      prisma.expense.findMany({ where: { userId, date: { gte: startOfMonth, lt: startOfNextMonth } } }),
       prisma.debt.findMany({ where: { userId } }),
       prisma.goal.findMany({ where: { userId } }),
       prisma.income.findMany({
@@ -96,8 +106,8 @@ export async function GET(request: Request) {
         include: { category: true },
       }),
       // Cashflow: all incomes of the last 7 days — no take limit
-      prisma.income.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
-      prisma.expense.findMany({ where: { userId, date: { gte: sevenDaysAgo } } }),
+      prisma.income.findMany({ where: { userId, date: { gte: sevenDaysAgo, lt: tomorrow } } }),
+      prisma.expense.findMany({ where: { userId, date: { gte: sevenDaysAgo, lt: tomorrow } } }),
       prisma.creditCard.findMany({ where: { userId } }),
     ]);
 
@@ -125,24 +135,12 @@ export async function GET(request: Request) {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 6);
 
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (6 - i));
-      return d;
-    });
-
-    const cashFlow = last7Days.map((day) => {
-      const dayStr = day.toLocaleDateString('es-CO', { weekday: 'short' });
-      const start = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-      const end   = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
-      const inc = cashFlowIncomes
-        .filter((i) => new Date(i.date) >= start && new Date(i.date) <= end)
-        .reduce((s, i) => s + i.amount, 0);
-      const exp = cashFlowExpenses
-        .filter((e) => new Date(e.date) >= start && new Date(e.date) <= end)
-        .reduce((s, e) => s + e.amount, 0);
-      return { name: dayStr, income: inc, expense: exp };
-    });
+    const dayOf = (d: Date) => d.toISOString().slice(0, 10);
+    const cashFlow = last7Days.map((day) => ({
+      name: weekdayLabel(day),
+      income:  cashFlowIncomes.filter((i) => dayOf(i.date) === day).reduce((s, i) => s + i.amount, 0),
+      expense: cashFlowExpenses.filter((e) => dayOf(e.date) === day).reduce((s, e) => s + e.amount, 0),
+    }));
 
     return NextResponse.json({
       totalBalance,
@@ -155,7 +153,11 @@ export async function GET(request: Request) {
       cashFlow,
       accountsCount: visibleAccountsCount,
     });
-  } catch {
-    return NextResponse.json(MOCK_DASHBOARD);
+  } catch (error) {
+    console.error('[dashboard]', error);
+    return NextResponse.json(
+      { error: 'No se pudieron cargar tus datos. Intenta de nuevo en unos minutos.' },
+      { status: 503 },
+    );
   }
 }

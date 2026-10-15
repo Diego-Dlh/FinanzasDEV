@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { addDaysISO, dateOnlyToUTC } from '@/lib/dates';
 
 export async function GET(request: Request) {
   const userId = authenticateToken(request.headers.get('authorization'));
@@ -12,9 +13,14 @@ export async function GET(request: Request) {
   const type   = searchParams.get('type') ?? 'ALL';
   const catId  = searchParams.get('categoryId') ?? '';
 
+  // from/to are calendar dates ('YYYY-MM-DD'), stored as UTC midnight; `to` is inclusive
+  const isYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s));
+  if ((from && !isYmd(from)) || (to && !isYmd(to))) {
+    return NextResponse.json({ error: 'Fechas inválidas (formato AAAA-MM-DD)' }, { status: 400 });
+  }
   const dateFilter: Record<string, Date> = {};
-  if (from) dateFilter.gte = new Date(from);
-  if (to)   dateFilter.lte = new Date(to + 'T23:59:59');
+  if (from) dateFilter.gte = dateOnlyToUTC(from);
+  if (to)   dateFilter.lt  = dateOnlyToUTC(addDaysISO(to, 1));
 
   const catFilter = catId ? { categoryId: catId } : {};
 

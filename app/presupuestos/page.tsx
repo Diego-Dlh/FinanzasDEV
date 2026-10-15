@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Plus, Trash2, Target, Pencil, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { addDaysISO, currentMonthISO, toDateInput, todayISO } from '@/lib/dates';
 import { budgetSchema, type BudgetInput, goalSchema, type GoalInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -161,15 +162,12 @@ export default function BudgetPage() {
   if (isLoading || loadingData) return <PageSpinner />;
   if (!user) return null;
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-
-  // Gastos del mes actual agrupados por categoría (lowercase para matching)
+  // Gastos del mes actual agrupados por categoría (lowercase para matching).
+  // e.date es una fecha de calendario en UTC: su mes es el prefijo 'YYYY-MM'.
+  const thisMonth = currentMonthISO();
   const spentByCategory: Record<string, number> = {};
   for (const e of expenses) {
-    const d = new Date(e.date);
-    if (d < startOfMonth || d > endOfMonth) continue;
+    if (!e.date.startsWith(thisMonth)) continue;
     const key = e.category.name.toLowerCase();
     spentByCategory[key] = (spentByCategory[key] ?? 0) + e.amount;
   }
@@ -261,7 +259,7 @@ export default function BudgetPage() {
               <h2 className="text-xl font-semibold text-primary mt-0.5">Metas</h2>
             </div>
             <button
-              onClick={() => { setEditGoal(null); resetG({ currentAmount: 0, targetDate: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0] }); setShowGoalModal(true); }}
+              onClick={() => { setEditGoal(null); resetG({ currentAmount: 0, targetDate: addDaysISO(todayISO(), 365) }); setShowGoalModal(true); }}
               className="flex items-center gap-1.5 rounded-2xl bg-secondary px-4 py-2.5 text-xs font-semibold text-white hover:opacity-90 transition"
             >
               <Plus size={14} /> Nueva meta
@@ -295,7 +293,7 @@ export default function BudgetPage() {
                           <span className={`text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full ${status.color}`}>
                             {status.label}
                           </span>
-                          <button onClick={() => { setEditGoal(g); resetG({ title: g.title, description: g.description, targetAmount: g.targetAmount, currentAmount: g.currentAmount, targetDate: new Date(g.targetDate).toISOString().split('T')[0] }); setShowGoalModal(true); }} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container transition text-on-surface-variant">
+                          <button onClick={() => { setEditGoal(g); resetG({ title: g.title, description: g.description, targetAmount: g.targetAmount, currentAmount: g.currentAmount, targetDate: toDateInput(g.targetDate) }); setShowGoalModal(true); }} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface-container transition text-on-surface-variant">
                             <Pencil size={13} />
                           </button>
                           <button onClick={() => deleteGoal(g.id)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-error-container transition text-on-surface-variant hover:text-error">

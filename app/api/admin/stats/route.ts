@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
+import { startOfCurrentMonthInstant } from '@/lib/dates';
 
 export async function GET(request: Request) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
-  const now   = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  // createdAt is a real timestamp: month boundary in Colombia time
+  const start = startOfCurrentMonthInstant();
 
   const [totalUsers, newThisMonth, activeKey] = await Promise.all([
     prisma.user.count(),

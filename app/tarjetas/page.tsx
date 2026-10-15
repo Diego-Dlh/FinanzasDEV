@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CreditCard, Plus, Trash2, Pencil, ChevronLeft, ShoppingCart, Wallet } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { api } from '@/lib/api';
+import { fmtDate, todayISO } from '@/lib/dates';
 import { creditCardSchema, cardPurchaseSchema, cardPaymentSchema, type CreditCardInput, type CardPurchaseInput, type CardPaymentInput } from '@/lib/validators';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -181,7 +182,7 @@ export default function TarjetasPage() {
 
   function openPurchaseModal() {
     setPurchasePreview(null);
-    purchaseForm.reset({ date: new Date().toISOString().split('T')[0], installments: 1 });
+    purchaseForm.reset({ date: todayISO(), installments: 1 });
     setShowPurchaseModal(true);
   }
 
@@ -223,7 +224,7 @@ export default function TarjetasPage() {
     abonoForm.reset({
       amount: Math.round(minPayment),
       note: '',
-      paidAt: new Date().toISOString().split('T')[0],
+      paidAt: todayISO(),
       accountId: '',
     });
     setShowAbonoModal(true);
@@ -798,7 +799,7 @@ function CardDetail({
                   <div className="min-w-0">
                     <p className="font-semibold text-sm text-secondary">{fmt(payment.amount)}</p>
                     <p className="text-xs text-on-surface-variant">
-                      {new Date(payment.paidAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {fmtDate(payment.paidAt)}
                     </p>
                     {payment.note && (
                       <p className="text-xs text-on-surface-variant truncate">{payment.note}</p>
@@ -850,7 +851,7 @@ function CardDetail({
                       <p className="font-semibold text-sm text-on-surface truncate">{p.description}</p>
                       <p className="text-xs text-on-surface-variant">{p.category.name}</p>
                       <p className="text-xs text-on-surface-variant">
-                        {new Date(p.date).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {fmtDate(p.date)}
                       </p>
                     </div>
                   </div>
