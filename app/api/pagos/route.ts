@@ -3,12 +3,12 @@ import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { paymentSchema } from '@/lib/validators';
 import { dateOnlyToUTC, todayISO } from '@/lib/dates';
-import { HttpError, errorResponse, formatCOP, readJson } from '@/lib/http';
+import { api, HttpError, errorResponse, formatCOP, readJson } from '@/lib/http';
 import { systemCategoryId } from '@/lib/categories';
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -22,9 +22,9 @@ export async function GET(request: Request) {
   return NextResponse.json({ payments });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   try {
@@ -95,3 +95,6 @@ export async function POST(request: Request) {
     return errorResponse(error);
   }
 }
+
+export const GET = api(handleGet);
+export const POST = api(handlePost);

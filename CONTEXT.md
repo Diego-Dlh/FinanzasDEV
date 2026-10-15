@@ -79,7 +79,10 @@ Usar siempre variables CSS del tema: `bg-surface`, `bg-surface-container`, `bg-s
 
 - Token JWT en `localStorage.auth_token` (expira 7d)
 - Usuario en `localStorage.auth_user` (JSON) — incluye `isAdmin?: boolean`
-- `lib/auth.ts`: `hashPassword`, `verifyPassword`, `createToken`, `verifyToken`, `authenticateToken`
+- `lib/auth.ts`: `hashPassword`, `verifyPassword`, `createToken`, `verifyToken`, `authenticateToken` (**async**: además de la firma comprueba en la BD que el usuario exista y que `tokenVersion` coincida con el claim `tv` del token; si la BD no responde lanza 503). El usuario demo (`DEMO_USER_ID`) no tiene fila en la BD y se salta esa comprobación.
+- **Sesiones:** cambiar la contraseña (`PUT /api/auth/cambiar-password`) incrementa `User.tokenVersion` y devuelve un token nuevo para el dispositivo actual; las demás sesiones reciben 401 y la interfaz las lleva al login.
+- **API:** todas las rutas exportan `export const GET = api(handleGet)` (`lib/http.ts`): cualquier error se convierte en JSON (`HttpError` → su estado, JSON inválido → 400, P2002 → 409, P2025 → 404, BD caída → 503, resto → 500). Usar `parseBody(request, schema)` para validar. Nunca devolver errores como objeto: siempre `{ error: string }`.
+- **Saldos de ingresos/gastos:** editar y eliminar bloquean la fila (`lib/rowLocks.ts`, `FOR UPDATE`) y la releen dentro de la transacción antes de calcular la diferencia.
 - `lib/adminAuth.ts`: `requireAdmin(authHeader)` — verifica userId + `isAdmin: true` en DB; `generateKey()` — genera código 6 chars alfanumérico sin ambiguos (sin 0/O, 1/I)
 - `lib/hooks/useAuth.tsx`: `AuthProvider`, `useAuth()`, `useProtected()`
   - `AuthUser = { id, name, email, isAdmin?: boolean }`

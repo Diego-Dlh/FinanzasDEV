@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { addDaysISO, addMonthsISO, currentMonthISO, dateOnlyToUTC, fmtDate, todayISO } from '@/lib/dates';
+import { api } from '@/lib/http';
 
 // Day `day` of month `ym`, clamped to the month's last day (dueDay 31 in a 30-day month)
 function dueDateInMonth(ym: string, day: number): Date {
@@ -19,8 +20,8 @@ const fmtCOP = (n: number) =>
  * Usa el campo `type` como clave de deduplicación (vencimiento_deuda_<id>).
  * No crea duplicados si ya existe una alerta del mismo tipo en los últimos 3 días.
  */
-export async function POST(request: Request) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handlePost(request: Request) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   // Due dates are calendar dates (UTC midnight); "today" is Colombia's
@@ -90,3 +91,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, created: 0 });
   }
 }
+
+export const POST = api(handlePost);

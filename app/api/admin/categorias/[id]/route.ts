@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
 import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
+import { api } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function PUT(request: Request, { params }: Params) {
+async function handlePut(request: Request, { params }: Params) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -37,7 +38,7 @@ export async function PUT(request: Request, { params }: Params) {
   return NextResponse.json({ category });
 }
 
-export async function DELETE(request: Request, { params }: Params) {
+async function handleDelete(request: Request, { params }: Params) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -63,3 +64,6 @@ export async function DELETE(request: Request, { params }: Params) {
   await prisma.category.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = api(handlePut);
+export const DELETE = api(handleDelete);

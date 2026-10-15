@@ -3,13 +3,13 @@ import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { cardPaymentSchema } from '@/lib/validators';
 import { dateOnlyToUTC } from '@/lib/dates';
-import { HttpError, errorResponse, formatCOP, readJson } from '@/lib/http';
+import { api, HttpError, errorResponse, formatCOP, readJson } from '@/lib/http';
 import { systemCategoryId } from '@/lib/categories';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function GET(request: Request, { params }: Params) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handleGet(request: Request, { params }: Params) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id: cardId } = await params;
@@ -24,8 +24,8 @@ export async function GET(request: Request, { params }: Params) {
   return NextResponse.json({ payments });
 }
 
-export async function POST(request: Request, { params }: Params) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handlePost(request: Request, { params }: Params) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id: cardId } = await params;
@@ -106,3 +106,6 @@ export async function POST(request: Request, { params }: Params) {
     return errorResponse(error);
   }
 }
+
+export const GET = api(handleGet);
+export const POST = api(handlePost);

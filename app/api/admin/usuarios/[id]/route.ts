@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
+import { api } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function DELETE(request: Request, { params }: Params) {
+async function handleDelete(request: Request, { params }: Params) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -36,3 +37,5 @@ export async function DELETE(request: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const DELETE = api(handleDelete);

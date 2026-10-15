@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
 import { startOfCurrentMonthInstant } from '@/lib/dates';
+import { api } from '@/lib/http';
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -18,3 +19,5 @@ export async function GET(request: Request) {
 
   return NextResponse.json({ totalUsers, newThisMonth, activeKey });
 }
+
+export const GET = api(handleGet);

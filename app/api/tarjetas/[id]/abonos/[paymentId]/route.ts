@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
-import { HttpError, errorResponse } from '@/lib/http';
+import { api, HttpError, errorResponse } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string; paymentId: string }> }
 
-export async function DELETE(request: Request, { params }: Params) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handleDelete(request: Request, { params }: Params) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id: cardId, paymentId } = await params;
@@ -48,3 +48,5 @@ export async function DELETE(request: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const DELETE = api(handleDelete);

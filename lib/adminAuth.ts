@@ -2,7 +2,7 @@ import { prisma } from './prisma';
 import { authenticateToken } from './auth';
 
 export async function requireAdmin(authHeader: string | null): Promise<string | null> {
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return null;
   const user = await prisma.user.findFirst({ where: { id: userId, isAdmin: true } });
   return user ? userId : null;

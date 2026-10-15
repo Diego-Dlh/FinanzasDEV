@@ -2,95 +2,87 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { incomeSchema } from '@/lib/validators';
-import { errorResponse } from '@/lib/http';
+import { api, HttpError, parseBody } from '@/lib/http';
 import { validateCategory } from '@/lib/categories';
+import { lockIncome } from '@/lib/rowLocks';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function PUT(request: Request, { params }: Params) {
+async function handlePut(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
   const existing = await prisma.income.findFirst({ where: { id, userId } });
   if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  const body = await request.json();
-  const parse = incomeSchema.partial().safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: parse.error.issues[0]?.message ?? 'Datos inválidos' }, { status: 400 });
+  const data = await parseBody(request, incomeSchema.partial());
+  if (data.categoryId && data.categoryId !== existing.categoryId) {
+    await validateCategory(data.categoryId, 'INCOME');
   }
 
-  const newAmount    = parse.data.amount    ?? existing.amount;
-  const newAccountId = parse.data.accountId ?? existing.accountId;
-  const accountChanged = newAccountId !== existing.accountId;
-  const amountChanged  = newAmount !== existing.amount;
+  const income = await prisma.$transaction(async (tx) => {
+    // Lock, then re-read: the balance difference must be computed from the current row
+    await lockIncome(tx, id);
+    const current = await tx.income.findFirst({ where: { id, userId } });
+    if (!current) throw new HttpError(404, 'No encontrado');
 
-  if (accountChanged) {
-    const account = await prisma.account.findFirst({ where: { id: newAccountId, userId } });
-    if (!account) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-  }
-  if (parse.data.categoryId && parse.data.categoryId !== existing.categoryId) {
-    try {
-      await validateCategory(parse.data.categoryId, 'INCOME');
-    } catch (error) {
-      return errorResponse(error);
+    const newAmount    = data.amount    ?? current.amount;
+    const newAccountId = data.accountId ?? current.accountId;
+    const accountChanged = newAccountId !== current.accountId;
+
+    if (accountChanged) {
+      const account = await tx.account.findFirst({ where: { id: newAccountId, userId } });
+      if (!account) throw new HttpError(404, 'Cuenta no encontrada');
     }
-  }
 
-  const incomeUpdate = prisma.income.update({
-    where: { id },
-    data: {
-      name:       parse.data.name       ?? existing.name,
-      amount:     newAmount,
-      categoryId: parse.data.categoryId ?? existing.categoryId,
-      accountId:  newAccountId,
-      date:       parse.data.date       ? new Date(parse.data.date) : existing.date,
-      frequency:  parse.data.frequency  ?? existing.frequency,
-    },
+    const updated = await tx.income.update({
+      where: { id },
+      data: {
+        name:       data.name       ?? current.name,
+        amount:     newAmount,
+        categoryId: data.categoryId ?? current.categoryId,
+        accountId:  newAccountId,
+        date:       data.date       ? new Date(data.date) : current.date,
+        frequency:  data.frequency  ?? current.frequency,
+      },
+    });
+
+    if (accountChanged) {
+      await tx.account.update({ where: { id: current.accountId }, data: { balance: { decrement: current.amount } } });
+      await tx.account.update({ where: { id: newAccountId },      data: { balance: { increment: newAmount } } });
+    } else if (newAmount !== current.amount) {
+      await tx.account.update({ where: { id: current.accountId }, data: { balance: { increment: newAmount - current.amount } } });
+    }
+    return updated;
   });
 
-  if (accountChanged) {
-    const ops = [
-      incomeUpdate,
-      prisma.account.update({ where: { id: existing.accountId }, data: { balance: { decrement: existing.amount } } }),
-      prisma.account.update({ where: { id: newAccountId },       data: { balance: { increment: newAmount } } }),
-    ] as const;
-    const [income] = await prisma.$transaction([...ops]);
-    return NextResponse.json({ income });
-  }
-
-  if (amountChanged) {
-    const diff = newAmount - existing.amount;
-    const ops = [
-      incomeUpdate,
-      prisma.account.update({ where: { id: existing.accountId }, data: { balance: { increment: diff } } }),
-    ] as const;
-    const [income] = await prisma.$transaction([...ops]);
-    return NextResponse.json({ income });
-  }
-
-  const income = await incomeUpdate;
   return NextResponse.json({ income });
 }
 
-export async function DELETE(request: Request, { params }: Params) {
+async function handleDelete(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
-  const existing = await prisma.income.findFirst({ where: { id, userId } });
-  if (!existing) return NextResponse.json({ error: 'No encontrado' }, { status: 404 });
 
-  await prisma.$transaction([
-    prisma.income.delete({ where: { id } }),
-    prisma.account.update({
-      where: { id: existing.accountId },
-      data: { balance: { decrement: existing.amount } },
-    }),
-  ]);
+  await prisma.$transaction(async (tx) => {
+    // Lock, then re-read: concurrent deletes must reverse the balance exactly once
+    await lockIncome(tx, id);
+    const current = await tx.income.findFirst({ where: { id, userId } });
+    if (!current) throw new HttpError(404, 'No encontrado');
+
+    await tx.income.delete({ where: { id } });
+    await tx.account.update({
+      where: { id: current.accountId },
+      data: { balance: { decrement: current.amount } },
+    });
+  });
 
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = api(handlePut);
+export const DELETE = api(handleDelete);

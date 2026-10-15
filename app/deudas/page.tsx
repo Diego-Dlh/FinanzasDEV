@@ -186,7 +186,7 @@ export default function DebtsPage() {
   const totalDebtRegular = debts.reduce((s, d) => s + d.balance, 0);
   const totalDebtCards = cards.reduce((s, c) => s + c.usedBalance, 0);
   const grandTotal = totalDebtRegular + totalDebtCards;
-  const totalMinPayment = debts.reduce((s, d) => s + d.minPayment, 0);
+  const totalMinPayment = debts.filter((d) => d.balance > 0).reduce((s, d) => s + d.minPayment, 0);
 
   return (
     <main className="min-h-screen bg-surface text-on-surface pb-32 lg:pb-12">
@@ -320,27 +320,36 @@ export default function DebtsPage() {
             {debts.length > 0 && (
               <>
                 <h3 className="text-base font-semibold text-primary px-1">Deudas Activas</h3>
-                {debts.map((debt) => (
-                  <div key={debt.id} className="glass-card rounded-[24px] p-5 shadow-card">
+                {/* Paid-off debts (balance 0) go last */}
+                {[...debts].sort((a, b) => Number(a.balance <= 0) - Number(b.balance <= 0)).map((debt) => {
+                  const paidOff = debt.balance <= 0;
+                  return (
+                  <div key={debt.id} className={`glass-card rounded-[24px] p-5 shadow-card ${paidOff ? 'opacity-70' : ''}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="font-semibold text-on-surface">{debt.name}</p>
                         <p className="text-xs text-on-surface-variant mt-0.5">{debt.entity}</p>
-                        <p className="text-2xl font-bold text-on-tertiary-container mt-2">{fmt(debt.balance)}</p>
+                        {paidOff ? (
+                          <span className="inline-block mt-2 rounded-full bg-secondary/10 px-3 py-1 text-sm font-semibold text-secondary">Pagada</span>
+                        ) : (
+                          <p className="text-2xl font-bold text-on-tertiary-container mt-2">{fmt(debt.balance)}</p>
+                        )}
                       </div>
                       <div className="text-right text-sm text-on-surface-variant space-y-1">
                         <p className="font-semibold text-on-surface">{debt.interestRate}% E.A.</p>
-                        <p>Mín: {fmt(debt.minPayment)}</p>
+                        {!paidOff && <p>Mín: {fmt(debt.minPayment)}</p>}
                         <p className="text-xs">{fmtDate(debt.dueDate, { month: 'short', year: 'numeric' })}</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between mt-4">
+                      {paidOff ? <span /> : (
                       <button
                         onClick={() => openPayment(debt)}
                         className="flex items-center gap-1.5 rounded-xl bg-secondary/10 text-secondary px-3 py-2 text-xs font-semibold hover:bg-secondary/20 transition"
                       >
                         <DollarSign size={13} /> Registrar pago
                       </button>
+                      )}
                       <div className="flex items-center gap-1">
                         <button onClick={() => openEdit(debt)} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-surface-container transition text-on-surface-variant">
                           <Pencil size={15} />
@@ -351,7 +360,8 @@ export default function DebtsPage() {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </>
             )}
 

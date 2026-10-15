@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { creditCardSchema } from '@/lib/validators';
-import { errorResponse, readJson } from '@/lib/http';
+import { api, errorResponse, readJson } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function GET(request: Request, { params }: Params) {
+async function handleGet(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
@@ -26,9 +26,9 @@ export async function GET(request: Request, { params }: Params) {
   return NextResponse.json({ card });
 }
 
-export async function PUT(request: Request, { params }: Params) {
+async function handlePut(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
@@ -64,9 +64,9 @@ export async function PUT(request: Request, { params }: Params) {
   }
 }
 
-export async function DELETE(request: Request, { params }: Params) {
+async function handleDelete(request: Request, { params }: Params) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { id } = await params;
@@ -99,3 +99,7 @@ export async function DELETE(request: Request, { params }: Params) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const GET = api(handleGet);
+export const PUT = api(handlePut);
+export const DELETE = api(handleDelete);

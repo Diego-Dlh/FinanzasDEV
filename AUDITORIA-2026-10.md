@@ -255,16 +255,17 @@
 - **Decisión de negocio a revisar:** una compra con tarjeta que supere el cupo disponible ahora se rechaza. Si prefieres solo advertir, es un cambio de una línea en `compras/route.ts`.
 
 ### Fase 4 — Robustez de la API (PR 4)
-- [ ] **M1** Helper `parseBody` para JSON inválido → 400. *(`readJson` en `lib/http.ts` ya existe y se usa en las rutas de la Fase 3; falta aplicarlo al resto.)*
-- [ ] **M2** Validación Zod en los PUT de presupuestos, metas, cuentas y admin/cuentas.
-- [ ] **M3** Formato de error uniforme (`string`).
+- [x] **M1** JSON inválido → 400 en **todas** las rutas: cada handler va envuelto en `api()` (`lib/http.ts`), que convierte cualquier error en una respuesta JSON; `parseBody` valida el cuerpo con Zod.
+- [x] **M2** Validación Zod en POST/PUT de cuentas, presupuestos, metas, deudas, configuración y admin/cuentas. Fechas reales (`2026-13-45` ya no da 500). `PUT /presupuestos` ya no acepta `spent`. Esquemas de actualización de metas sin `default` (en Zod 4, `.partial()` aplica los defaults y reiniciaría `currentAmount`).
+- [x] **M3** Errores siempre como texto (login y pagos devolvían un objeto → `[object Object]`).
 - [x] **M4** Validar `categoryId` (existe y su tipo es correcto) — resuelto en la Fase 3.
-- [ ] **M5** try/catch en los GET restantes.
-- [ ] **M6** Normalizar el email.
-- [ ] **M7** Capturar `P2002` en el registro.
-- [ ] **M8** Permitir saldo 0 en deudas y añadir estado "pagada".
-- [ ] **M9** 404 correcto en las rutas admin.
-- [ ] **S2** `tokenVersion` para invalidar sesiones al cambiar la contraseña o borrar al usuario.
+- [x] **M5** Ninguna ruta queda sin controlar: errores inesperados → JSON 500; base de datos caída → **503** (antes 500 o listas vacías); `GET /configuracion` cae al tema por defecto.
+- [x] **M6** Email normalizado (recortado y en minúsculas) en registro y login; la migración pasa a minúsculas los existentes que no colisionen.
+- [x] **M7** Registro simultáneo con el mismo correo → 409 (probado con 6 peticiones a la vez: 1 creado, 5 conflictos).
+- [x] **M8** Se puede editar una deuda a saldo 0 (crear con 0 sigue rechazado); la página la muestra como "Pagada", sin botón de pago y al final de la lista; el pago mínimo del resumen solo suma las activas.
+- [x] **M9** 404 correcto y tipos validados en las rutas de admin (`PUT/DELETE` de cuentas, categorías y usuarios inexistentes).
+- [x] **S2** `User.tokenVersion` (migración `20261016000000_user_token_version`): cambiar la contraseña o restablecer el admin cierra las demás sesiones (este dispositivo recibe un token nuevo); un usuario eliminado queda sin acceso; una caída de la BD da 503 y **no** desloguea. Los tokens anteriores sin `tv` siguen valiendo hasta el primer cambio de contraseña.
+- **Hallazgo durante las pruebas:** `DELETE /ingresos/[id]` y las ediciones simultáneas de ingresos/gastos descontaban el saldo varias veces (4 borrados simultáneos → saldo −199.877 en vez de −49.877). Corregido con `SELECT … FOR UPDATE` dentro de la transacción (`lib/rowLocks.ts`).
 
 ### Fase 5 — Lógica financiera (PR 5)
 - [ ] **F1** Patrimonio con todas las cuentas.

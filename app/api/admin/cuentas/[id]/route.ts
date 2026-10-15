@@ -1,25 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
+import { adminAccountUpdateSchema } from '@/lib/validators';
+import { api, parseBody } from '@/lib/http';
 
 interface Params { params: Promise<{ id: string }> }
 
-export async function PUT(request: Request, { params }: Params) {
+async function handlePut(request: Request, { params }: Params) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
   const { id } = await params;
-  const { name, type, balance, currency } = await request.json();
-  if (!name?.trim()) return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 });
+  const data = await parseBody(request, adminAccountUpdateSchema);
+
+  const existing = await prisma.account.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
 
   const account = await prisma.account.update({
     where: { id },
-    data: {
-      name: name.trim(),
-      type,
-      balance: Number(balance),
-      currency: currency || 'COP',
-    },
+    data,
     include: {
       user: { select: { id: true, name: true, email: true } },
       _count: { select: { incomes: true, expenses: true } },
@@ -29,7 +28,7 @@ export async function PUT(request: Request, { params }: Params) {
   return NextResponse.json({ account });
 }
 
-export async function DELETE(request: Request, { params }: Params) {
+async function handleDelete(request: Request, { params }: Params) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -52,3 +51,6 @@ export async function DELETE(request: Request, { params }: Params) {
   await prisma.account.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
+
+export const PUT = api(handlePut);
+export const DELETE = api(handleDelete);

@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { addDaysISO, dateOnlyToUTC } from '@/lib/dates';
+import { api } from '@/lib/http';
 
-export async function GET(request: Request) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handleGet(request: Request) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -105,3 +106,5 @@ export async function GET(request: Request) {
     });
   }
 }
+
+export const GET = api(handleGet);

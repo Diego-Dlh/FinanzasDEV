@@ -4,21 +4,25 @@ import { dateOnlyToUTC } from './dates';
 // 'YYYY-MM-DD' that is a real calendar day (rejects 2026-02-31, 'abc', '')
 const calendarDate = z
   .string()
+  .min(1, 'La fecha es requerida')
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida')
   .refine((s) => {
     const d = dateOnlyToUTC(s);
     return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
   }, 'Fecha inválida');
 
+// Emails are matched case-insensitively: stored and compared trimmed + lowercase
+const email = z.string().trim().toLowerCase().email('Correo inválido');
+
 export const registerSchema = z.object({
   name:            z.string().min(2, 'El nombre es requerido'),
-  email:           z.string().email('Correo inválido'),
+  email:           email,
   password:        z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
   registrationKey: z.string().min(1, 'El código de acceso es requerido'),
 });
 
 export const loginSchema = z.object({
-  email: z.string().email('Correo inválido'),
+  email,
   password: z.string().min(1, 'La contraseña es requerida'),
 });
 
@@ -29,7 +33,7 @@ export const incomeSchema = z.object({
   amount: z.number().positive('El monto debe ser positivo'),
   categoryId: z.string().min(1, 'La categoría es requerida'),
   accountId: z.string().min(1, 'La cuenta es requerida'),
-  date: z.string().min(1, 'La fecha es requerida'),
+  date: calendarDate,
   frequency: frequencyEnum,
 });
 
@@ -38,7 +42,7 @@ export const expenseSchema = z.object({
   amount: z.number().positive('El monto debe ser positivo'),
   categoryId: z.string().min(1, 'La categoría es requerida'),
   accountId: z.string().min(1, 'La cuenta es requerida'),
-  date: z.string().min(1, 'La fecha es requerida'),
+  date: calendarDate,
   frequency: frequencyEnum,
 });
 
@@ -48,7 +52,12 @@ export const debtSchema = z.object({
   balance: z.number().positive('El saldo debe ser positivo'),
   interestRate: z.number().min(0, 'Tasa inválida').max(100, 'Tasa inválida'),
   minPayment: z.number().positive('El pago mínimo debe ser positivo'),
-  dueDate: z.string().min(1, 'La fecha es requerida'),
+  dueDate: calendarDate,
+});
+
+// Editing may bring a debt to 0 (paid off); creating one with no balance makes no sense
+export const debtUpdateSchema = debtSchema.partial().extend({
+  balance: z.number().min(0, 'El saldo no puede ser negativo').optional(),
 });
 
 export const budgetSchema = z.object({
@@ -56,13 +65,22 @@ export const budgetSchema = z.object({
   allocated: z.number().positive('El monto debe ser positivo'),
 });
 
-export const goalSchema = z.object({
+const goalFields = {
   title: z.string().min(2, 'El título es requerido'),
   description: z.string().min(2, 'La descripción es requerida'),
   targetAmount: z.number().positive('El monto objetivo debe ser positivo'),
-  currentAmount: z.number().min(0, 'El monto actual debe ser >= 0').default(0),
-  targetDate: z.string().min(1, 'La fecha es requerida'),
+  currentAmount: z.number().min(0, 'El monto actual debe ser >= 0'),
+  targetDate: calendarDate,
+};
+
+export const goalSchema = z.object({
+  ...goalFields,
+  currentAmount: goalFields.currentAmount.default(0),
 });
+
+// No defaults here: zod 4 applies them inside .partial(), which would reset
+// currentAmount to 0 whenever a PUT doesn't send it.
+export const goalUpdateSchema = z.object(goalFields).partial();
 
 export const paymentSchema = z.object({
   debtId:    z.string().min(1, 'La deuda es requerida'),
@@ -116,3 +134,42 @@ export type CreditCardInput      = z.infer<typeof creditCardSchema>;
 export type CardPurchaseInput    = z.infer<typeof cardPurchaseSchema>;
 export type CardPaymentInput     = z.infer<typeof cardPaymentSchema>;
 export type ChangePasswordInput   = z.infer<typeof changePasswordSchema>;
+
+const accountTypeEnum = z.enum(['CASH', 'BANK', 'NEQUI', 'DAVIPLATA', 'CARD'], { error: 'Tipo de cuenta inválido' });
+const accountName = z.string().trim().min(1, 'El nombre es requerido').max(60, 'El nombre es demasiado largo');
+const currencyCode = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/, 'Moneda inválida');
+const balanceAmount = z.number({ error: 'El saldo debe ser un número' }).finite('El saldo debe ser un número');
+
+export const accountSchema = z.object({
+  name: accountName,
+  type: accountTypeEnum,
+  balance: balanceAmount.default(0),
+  currency: currencyCode.default('COP'),
+});
+
+// PUT /api/cuentas/[id]: only the fields sent are changed
+export const accountUpdateSchema = z.object({
+  name: accountName,
+  balance: balanceAmount,
+  currency: currencyCode,
+  hideFromTotal: z.boolean({ error: 'hideFromTotal debe ser verdadero o falso' }),
+}).partial();
+
+// Admin edits: full replacement of the editable fields
+export const adminAccountUpdateSchema = z.object({
+  name: accountName,
+  type: accountTypeEnum,
+  balance: balanceAmount,
+  currency: currencyCode.default('COP'),
+});
+
+export const adminAccountCreateSchema = adminAccountUpdateSchema.extend({
+  userId: z.string().min(1, 'userId requerido'),
+  balance: balanceAmount.default(0),
+});
+
+// POST /api/auth/cambiar-password (the confirm-password field is checked on the client)
+export const changePasswordApiSchema = z.object({
+  currentPassword: z.string().min(1, 'Ingresa tu contraseña actual'),
+  newPassword: z.string().min(6, 'La nueva contraseña debe tener al menos 6 caracteres'),
+});

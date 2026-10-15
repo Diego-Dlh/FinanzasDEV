@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { budgetSchema } from '@/lib/validators';
+import { api } from '@/lib/http';
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   try {
@@ -16,9 +17,9 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const body = await request.json();
@@ -31,3 +32,6 @@ export async function POST(request: Request) {
   const budget = await prisma.budget.create({ data: { userId, name, allocated, spent: 0 } });
   return NextResponse.json({ budget }, { status: 201 });
 }
+
+export const GET = api(handleGet);
+export const POST = api(handlePost);

@@ -90,10 +90,12 @@ export function TopBar({ title }: { title: string }) {
     setPwError('');
     setPwSuccess('');
     try {
-      await api.put('/auth/cambiar-password', {
+      const res = await api.put<{ token: string }>('/auth/cambiar-password', {
         currentPassword: data.currentPassword,
         newPassword: data.newPassword,
       });
+      // The password change signs out every session; this device gets a fresh token
+      if (res.token) localStorage.setItem('auth_token', res.token);
       setPwSuccess('Contraseña actualizada correctamente.');
       pwForm.reset();
     } catch (e) {

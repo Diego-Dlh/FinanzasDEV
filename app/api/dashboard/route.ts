@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateToken } from '@/lib/auth';
+import { authenticateToken, DEMO_USER_ID } from '@/lib/auth';
 import { addDaysISO, currentMonthISO, dateOnlyToUTC, monthRangeUTC, todayISO } from '@/lib/dates';
-
-// Token user created by /api/demo-login; it has no rows in the database
-const DEMO_USER_ID = 'demo-user-id';
+import { api } from '@/lib/http';
 
 function calcHealthScore(
   monthlyIncome: number,
@@ -60,9 +58,9 @@ function mockDashboard() {
   };
 }
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   // Sample data is only for the demo login; a real user must never see it
@@ -161,3 +159,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = api(handleGet);

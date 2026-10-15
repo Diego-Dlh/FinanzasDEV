@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
+import { api } from '@/lib/http';
 
-export async function GET(request: Request) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handleGet(request: Request) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const alerts = await prisma.alert.findMany({
@@ -15,8 +16,8 @@ export async function GET(request: Request) {
   return NextResponse.json({ alerts, unreadCount });
 }
 
-export async function PUT(request: Request) {
-  const userId = authenticateToken(request.headers.get('authorization'));
+async function handlePut(request: Request) {
+  const userId = await authenticateToken(request.headers.get('authorization'));
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const body = await request.json();
@@ -27,3 +28,6 @@ export async function PUT(request: Request) {
 
   return NextResponse.json({ error: 'Acción no reconocida' }, { status: 400 });
 }
+
+export const GET = api(handleGet);
+export const PUT = api(handlePut);

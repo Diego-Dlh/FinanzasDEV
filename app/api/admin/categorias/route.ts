@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireAdmin } from '@/lib/adminAuth';
 import { SYSTEM_CATEGORY_LIST } from '@/lib/categories';
+import { api } from '@/lib/http';
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ categories });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const adminId = await requireAdmin(request.headers.get('authorization'));
   if (!adminId) return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
 
@@ -40,3 +41,6 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ category }, { status: 201 });
 }
+
+export const GET = api(handleGet);
+export const POST = api(handlePost);

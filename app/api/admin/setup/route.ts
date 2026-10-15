@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { generateKey } from '@/lib/adminAuth';
+import { api } from '@/lib/http';
 
 const MIN_PASSWORD_LENGTH = 10;
 
@@ -10,7 +11,7 @@ const MIN_PASSWORD_LENGTH = 10;
 // (or promotes an existing user with that email) and ensures an active
 // registration key. An existing admin's password is only overwritten when
 // resetPassword=1 is passed — the recovery path if the admin is locked out.
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const { searchParams } = new URL(request.url);
   const key = searchParams.get('key');
   if (!process.env.SEED_KEY || !key || key !== process.env.SEED_KEY) {
@@ -42,7 +43,8 @@ export async function GET(request: Request) {
       where: { email },
       data: {
         isAdmin: true,
-        ...(resetPassword ? { password: await hashPassword(password) } : {}),
+        // A reset also signs out every existing session of that account
+        ...(resetPassword ? { password: await hashPassword(password), tokenVersion: { increment: 1 } } : {}),
       },
     });
   } else {
@@ -78,3 +80,5 @@ export async function GET(request: Request) {
     passwordReset: Boolean(existing && resetPassword),
   });
 }
+
+export const GET = api(handleGet);

@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateToken } from '@/lib/auth';
 import { creditCardSchema } from '@/lib/validators';
-import { errorResponse, readJson } from '@/lib/http';
+import { api, errorResponse, readJson } from '@/lib/http';
 
-export async function GET(request: Request) {
+async function handleGet(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   const cards = await prisma.creditCard.findMany({
@@ -26,9 +26,9 @@ export async function GET(request: Request) {
   return NextResponse.json({ cards });
 }
 
-export async function POST(request: Request) {
+async function handlePost(request: Request) {
   const authHeader = request.headers.get('authorization');
-  const userId = authenticateToken(authHeader);
+  const userId = await authenticateToken(authHeader);
   if (!userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
   try {
@@ -43,3 +43,6 @@ export async function POST(request: Request) {
     return errorResponse(error);
   }
 }
+
+export const GET = api(handleGet);
+export const POST = api(handlePost);
