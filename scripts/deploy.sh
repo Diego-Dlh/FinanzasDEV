@@ -5,7 +5,6 @@
 # =============================================================================
 set -euo pipefail
 
-COMPOSE_FILE="docker-compose.prod.yml"
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
@@ -16,7 +15,15 @@ cd "$APP_DIR"
 
 # ─── Preconditions ────────────────────────────────────────────────────────────
 [ -f ".env" ] || fail ".env file not found. Copy .env.example and fill in values."
+
+# Compose file: COMPOSE_FILE from the environment or .env (homelab sets it),
+# otherwise the VPS stack.
+if [ -z "${COMPOSE_FILE:-}" ]; then
+  COMPOSE_FILE=$(grep -E '^COMPOSE_FILE=' .env | tail -1 | cut -d= -f2- || true)
+fi
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 [ -f "$COMPOSE_FILE" ] || fail "$COMPOSE_FILE not found."
+log "Using compose file: $COMPOSE_FILE"
 
 command -v docker >/dev/null 2>&1   || fail "Docker not installed."
 command -v git    >/dev/null 2>&1   || fail "Git not installed."
@@ -27,6 +34,13 @@ log "Starting Lumina Finance deployment..."
 log "Pulling latest changes from git..."
 git pull origin main || fail "git pull failed."
 ok "Code updated."
+
+# ─── Backup before migrations ─────────────────────────────────────────────────
+# The new image runs `prisma migrate deploy` on start; keep a restore point.
+if [ "$(docker inspect --format='{{.State.Running}}' lumina_postgres 2>/dev/null)" = "true" ]; then
+  log "Backing up database before deploying..."
+  bash "$APP_DIR/scripts/backup.sh" || fail "Pre-deploy backup failed; aborting."
+fi
 
 # ─── Build new image ──────────────────────────────────────────────────────────
 log "Building Docker image..."

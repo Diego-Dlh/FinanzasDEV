@@ -15,8 +15,9 @@ coverage/
 *.cjs
 tsconfig.tsbuildinfo
 
-# Backups
+# Backups / logs de scripts
 backups/
+logs/
 
 # SSL certs (managed on server)
 nginx/ssl/*.pem

@@ -1,0 +1,102 @@
+# =============================================================================
+# Lumina Finance — Stack para homelab con Cloudflare Tunnel
+#
+#   Internet ──HTTPS──▶ Cloudflare ──túnel──▶ cloudflared ──HTTP──▶ nginx ──▶ app ──▶ postgres
+#
+# No publica puertos hacia internet: Cloudflare termina el HTTPS y el túnel es
+# una conexión saliente. Guía completa: docs/HOMELAB.md
+#
+# Uso:  cp .env.homelab.example .env   (y completar valores)
+#       docker compose up -d --build
+# =============================================================================
+services:
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: lumina_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:?Falta POSTGRES_DB en .env}
+      POSTGRES_USER:     ${POSTGRES_USER:?Falta POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    # Sin puertos publicados. Para conectarte desde el propio servidor con un
+    # cliente SQL, descomenta (queda accesible solo en localhost):
+    # ports:
+    #   - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lumina_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ─── Next.js App ─────────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lumina-app:latest
+    container_name: lumina_app
+    restart: unless-stopped
+    # Lista explícita (no env_file) para que el token del túnel no llegue a la app
+    environment:
+      DATABASE_URL:   postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      NODE_ENV:       production
+      JWT_SECRET:     ${JWT_SECRET:?Falta JWT_SECRET en .env}
+      SEED_KEY:       ${SEED_KEY:?Falta SEED_KEY en .env}
+      ADMIN_EMAIL:    ${ADMIN_EMAIL:?Falta ADMIN_EMAIL en .env}
+      ADMIN_NAME:     ${ADMIN_NAME:?Falta ADMIN_NAME en .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Falta ADMIN_PASSWORD en .env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - lumina_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+
+  # ─── Nginx (solo HTTP interno: rate limiting + gzip) ─────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: lumina_nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx/homelab/nginx.conf:/etc/nginx/nginx.conf:ro
+    # Acceso directo desde la LAN (opcional, sin pasar por Cloudflare):
+    # ports:
+    #   - "8080:80"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - lumina_net
+
+  # ─── Cloudflare Tunnel ───────────────────────────────────────────────────────
+  cloudflared:
+    image: cloudflare/cloudflared:2024.12.2
+    container_name: lumina_cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Falta TUNNEL_TOKEN en .env (ver docs/HOMELAB.md)}
+    depends_on:
+      - nginx
+    networks:
+      - lumina_net
+
+volumes:
+  postgres_data:
+    name: lumina_postgres_data
+
+networks:
+  lumina_net:
+    driver: bridge

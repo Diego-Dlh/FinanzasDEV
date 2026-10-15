@@ -36,7 +36,18 @@ node -e "require('ts-node').register({transpileOnly:true}); require('./prisma/se
 
 ---
 
-## Docker — Producción (VPS)
+## Docker — Homelab con Cloudflare Tunnel (recomendado)
+
+Despliegue actual: servidor propio, sin abrir puertos. Guía completa en [`docs/HOMELAB.md`](docs/HOMELAB.md).
+
+```bash
+cp .env.homelab.example .env   # completar valores
+./scripts/homelab-init.sh      # levanta el stack, crea admin y categorías
+```
+
+---
+
+## Docker — Producción (VPS, legado)
 
 ### 1. Clonar en el servidor
 
