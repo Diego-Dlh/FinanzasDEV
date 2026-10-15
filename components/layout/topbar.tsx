@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Bell, LogOut, Moon, Sun, Lock, Trash2, CheckCheck, X, Shield } from 'lucide-react';
+import { Bell, LogOut, Moon, Sun, Lock, CheckCheck, X, Shield } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -23,7 +23,7 @@ interface Alert {
 
 export function TopBar({ title }: { title: string }) {
   const { user, logout } = useAuth();
-  const { isDark, toggle, setDark } = useTheme();
+  const { isDark, toggle } = useTheme();
   const router = useRouter();
 
   const [showSettings, setShowSettings] = useState(false);

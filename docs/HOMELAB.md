@@ -98,7 +98,7 @@ crontab -e
 */5 * * * * /ruta/a/FinanzasDEV/scripts/auto-deploy.sh
 ```
 
-El log queda en `logs/autodeploy.log`. Ojo: cualquier push a `main` llega a producción sin pasar por tests; considera dejarlo manual hasta tener CI (ver auditoría, I1).
+El log queda en `logs/autodeploy.log`. Ojo: cualquier push a `main` llega a producción sin pasar por tests; el CI (`.github/workflows/ci.yml`) corre tipos, lint, migraciones y pruebas en GitHub, pero no bloquea el autodeploy: revisa que esté en verde antes de hacer push a `main`.
 
 ## 6. Backups
 

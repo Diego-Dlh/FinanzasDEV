@@ -681,3 +681,11 @@ Espera la siguiente instrucción.
 - Los **pagos de deuda** sí cuentan como gasto (una deuda no tiene registro de compra propio).
 - Tasas: las tasas se piden como **E.A.**; se convierten con `(1+EA)^(1/12) − 1` (`lib/finance-math.ts`).
 - `GET /api/admin/conciliacion` (solo lectura) compara cada saldo con la suma de sus movimientos para detectar descuadres.
+
+## 17. Infraestructura y pruebas (Fase 6)
+
+- Prisma 6; `npm run typecheck`, `npm run lint` (ESLint 9 flat config), `npm run test:unit`, `npm run test:e2e` (ver `tests/README.md`).
+- CI en `.github/workflows/ci.yml`: tipos, lint, unitarias, `prisma migrate deploy` + `migrate diff --exit-code` (el esquema y las migraciones no pueden divergir), build y e2e contra Postgres.
+- `docker-compose.yml` es solo para desarrollo (la BD; la app queda tras `--profile app`). Producción: `docker-compose.prod.yml` o `docker-compose.homelab.yml`.
+- `scripts/restore.sh` restaura en una BD temporal, la valida y solo entonces la intercambia; hace un backup previo y detiene/reinicia la app.
+- Montos: siguen en `Float` (decisión I5, ver `docs/DECISIONES.md`).

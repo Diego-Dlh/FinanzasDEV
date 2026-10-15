@@ -17,10 +17,17 @@ git clone https://github.com/tu-usuario/lumina-finance.git
 cd lumina-finance
 cp .env.example .env       # editar con tus valores
 npm install
-docker compose up -d       # levanta PostgreSQL en puerto 5433
+docker compose up -d db    # levanta PostgreSQL en el puerto 5433 (solo local)
 npx prisma migrate dev
 npm run dev                # http://localhost:3000
 ```
+
+### Calidad y pruebas
+```bash
+npm run typecheck && npm run lint && npm run test:unit   # rápidas, sin base de datos
+npm run test:e2e                                         # con servidor y base de datos de pruebas
+```
+Ver [tests/README.md](tests/README.md). El CI (`.github/workflows/ci.yml`) corre todo en cada push.
 
 ### Seed (datos de prueba)
 ```bash

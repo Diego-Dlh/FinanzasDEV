@@ -114,6 +114,8 @@ export default function TarjetasPage() {
     }
   }
 
+  // Load once per session; loadData reads selectedCard only to refresh the open detail
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user) loadData(); }, [user]);
 
   function openAddCard() {
@@ -289,7 +291,6 @@ export default function TarjetasPage() {
         {selectedCard ? (
           <CardDetail
             card={selectedCard}
-            categories={categories}
             onBack={() => setSelectedCard(null)}
             onEdit={() => openEditCard(selectedCard)}
             onDelete={() => handleDeleteCard(selectedCard.id)}
@@ -664,7 +665,6 @@ function CardSummaryItem({
 
 function CardDetail({
   card,
-  categories,
   onBack,
   onEdit,
   onDelete,
@@ -674,7 +674,6 @@ function CardDetail({
   onDeleteAbono,
 }: {
   card: CreditCardData;
-  categories: Category[];
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Calculator, TrendingUp, Percent, Shield, ChevronDown, ChevronUp, PiggyBank, Target } from 'lucide-react';
+import { Calculator, TrendingUp, Percent, Shield, ChevronDown, ChevronUp, Target } from 'lucide-react';
 import { useProtected } from '@/lib/hooks/useAuth';
 import { BottomNav } from '@/components/layout/bottomnav';
 import { TopBar } from '@/components/layout/topbar';
@@ -10,7 +10,6 @@ import { compoundGrowth, loanPayment, monthlyRateFromEA, monthlySavingsNeeded, p
 function fmt(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
 }
-function fmtPct(n: number) { return `${n.toFixed(2)}%`; }
 
 // ── Simple Interest ──────────────────────────────────────────────────────────
 function SimpleInterestCalc() {

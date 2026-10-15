@@ -131,6 +131,8 @@ export default function HistorialPage() {
     URL.revokeObjectURL(url);
   }
 
+  // Reload when a filter changes; the category list is only fetched the first time
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (user) loadData(); }, [user, period, type, catId]);
 
   const filtered = useMemo(() => {

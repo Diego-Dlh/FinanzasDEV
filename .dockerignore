@@ -40,3 +40,7 @@ backups/
 
 # Docs
 README.md
+
+# Tests and docs (not needed in the image)
+tests/
+docs/

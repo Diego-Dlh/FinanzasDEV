@@ -279,13 +279,13 @@
 - Adicional: el contador de `/gastos` decía "transacciónes".
 
 ### Fase 6 — Infraestructura y base de datos (PR 6)
-- [ ] **S3** Let's Encrypt; HSTS sin `preload` hasta tener un certificado válido; unificar el dominio.
-- [ ] **I1** Backup antes del deploy + CI (typecheck + lint).
-- [ ] **I2** `restore.sh` detiene la app antes de restaurar.
-- [ ] **I3** Ajustar los límites de Nginx.
-- [ ] **I4** Migración: índices, FKs, `currency` COP, unique en `RegistrationKey.code`.
-- [ ] **I5** (planificar) Montos en `Decimal`/enteros.
-- [ ] **I6** Actualizar Prisma y alinear ESLint; añadir el script `typecheck`.
+- [x] **S3** HSTS sin `preload` y con `max-age=300` mientras el certificado sea autofirmado (instrucciones en el propio `app.conf` para subirlo con Let's Encrypt). Emitir el certificado real es un paso manual del servidor.
+- [x] **I1** Backup antes del deploy (ya en `deploy.sh`) + CI (`.github/workflows/ci.yml`: tipos, lint, unitarias, migraciones, build, e2e).
+- [x] **I2** `restore.sh` detiene la app, hace backup previo, restaura en una BD temporal, la valida y solo entonces la intercambia.
+- [x] **I3** Límite de `/api/` subido a 120 req/min (ráfaga 40); la pantalla principal hace varias llamadas a la vez.
+- [x] **I4** Migración `20261018000000_indexes_and_payment_links`: índices, FKs `SET NULL` (limpia huérfanos antes), `currency` COP y unique en `RegistrationKey.code`.
+- [x] **I5** Decisión documentada en `docs/DECISIONES.md`: se mantiene `Float` (COP sin centavos); migración a `Decimal` queda como trabajo aparte.
+- [x] **I6** Prisma 6.19, ESLint 9 con flat config, scripts `typecheck`, `lint`, `test:*`; 0 avisos de lint.
 - [x] **M11** Seed idempotente o deshabilitado en producción — resuelto en la Fase 1 (`/api/seed` eliminado).
 
 ### Fase 7 — UX y pulido (PR 7)

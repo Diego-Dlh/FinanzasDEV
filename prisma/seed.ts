@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 
@@ -32,7 +32,7 @@ async function main() {
 
   // ─── Categories (global, shared across all users) ────────────────────────────
   const categories = await Promise.all(
-    [
+    ([
       // Income
       { name: 'Salario',              type: 'INCOME' },
       { name: 'Freelance',            type: 'INCOME' },
@@ -53,7 +53,7 @@ async function main() {
       // System (created by the app for debt / card payments)
       { name: 'Pago de Deuda',        type: 'EXPENSE', isSystem: true },
       { name: 'Abono Tarjeta',        type: 'EXPENSE', isSystem: true },
-    ].map((cat) => prisma.category.create({ data: cat as any }))
+    ] satisfies Prisma.CategoryCreateInput[]).map((cat) => prisma.category.create({ data: cat }))
   );
 
   const catMap = Object.fromEntries(categories.map((c) => [c.name, c.id]));

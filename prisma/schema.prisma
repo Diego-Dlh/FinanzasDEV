@@ -29,42 +29,46 @@ enum AccountType {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  name           String
-  email          String         @unique
-  password       String
-  isAdmin        Boolean        @default(false)
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  password      String
+  isAdmin       Boolean        @default(false)
   // Bumped when the password changes: tokens carrying an older value stop working
-  tokenVersion   Int            @default(0)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  incomes        Income[]
-  expenses       Expense[]
-  debts          Debt[]
-  budgets        Budget[]
-  goals          Goal[]
-  payments       Payment[]
-  accounts       Account[]
-  alerts         Alert[]
-  settings       Setting?
-  creditCards    CreditCard[]
-  cardPurchases  CardPurchase[]
-  cardPayments   CardPayment[]
+  tokenVersion  Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  incomes       Income[]
+  expenses      Expense[]
+  debts         Debt[]
+  budgets       Budget[]
+  goals         Goal[]
+  payments      Payment[]
+  accounts      Account[]
+  alerts        Alert[]
+  settings      Setting?
+  creditCards   CreditCard[]
+  cardPurchases CardPurchase[]
+  cardPayments  CardPayment[]
 }
 
 model Account {
-  id          String      @id @default(cuid())
-  user        User        @relation(fields: [userId], references: [id])
-  userId      String
-  name        String
-  type        AccountType
-  balance       Float       @default(0)
-  currency      String      @default("USD")
-  hideFromTotal Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  incomes     Income[]
-  expenses    Expense[]
+  id            String        @id @default(cuid())
+  user          User          @relation(fields: [userId], references: [id])
+  userId        String
+  name          String
+  type          AccountType
+  balance       Float         @default(0)
+  currency      String        @default("COP")
+  hideFromTotal Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  incomes       Income[]
+  expenses      Expense[]
+  payments      Payment[]
+  cardPayments  CardPayment[]
+
+  @@index([userId])
 }
 
 model Category {
@@ -92,86 +96,113 @@ model Income {
   date       DateTime
   frequency  Frequency
   createdAt  DateTime  @default(now())
+
+  @@index([userId, date])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 model Expense {
-  id         String    @id @default(cuid())
-  user       User      @relation(fields: [userId], references: [id])
-  userId     String
-  account    Account   @relation(fields: [accountId], references: [id])
-  accountId  String
-  category   Category  @relation(fields: [categoryId], references: [id])
-  categoryId String
-  description String
-  amount     Float
-  date       DateTime
-  frequency  Frequency
-  createdAt  DateTime  @default(now())
+  id           String        @id @default(cuid())
+  user         User          @relation(fields: [userId], references: [id])
+  userId       String
+  account      Account       @relation(fields: [accountId], references: [id])
+  accountId    String
+  category     Category      @relation(fields: [categoryId], references: [id])
+  categoryId   String
+  description  String
+  amount       Float
+  date         DateTime
+  frequency    Frequency
+  createdAt    DateTime      @default(now())
+  payments     Payment[]
+  cardPayments CardPayment[]
+
+  @@index([userId, date])
+  @@index([accountId])
+  @@index([categoryId])
 }
 
 model Debt {
-  id             String    @id @default(cuid())
-  user           User      @relation(fields: [userId], references: [id])
-  userId         String
-  name           String
-  entity         String
-  balance        Float
-  interestRate   Float
-  minPayment     Float
-  dueDate        DateTime
-  createdAt      DateTime  @default(now())
-  payments       Payment[]
-}
-
-model Payment {
-  id         String   @id @default(cuid())
-  user       User     @relation(fields: [userId], references: [id])
-  userId     String
-  debt       Debt     @relation(fields: [debtId], references: [id])
-  debtId     String
-  amount     Float
-  paidAt     DateTime @default(now())
-  createdAt  DateTime @default(now())
-  accountId  String?
-  expenseId  String?
-}
-
-model Budget {
   id           String    @id @default(cuid())
   user         User      @relation(fields: [userId], references: [id])
   userId       String
   name         String
-  allocated    Float
+  entity       String
+  balance      Float
+  interestRate Float
+  minPayment   Float
+  dueDate      DateTime
+  createdAt    DateTime  @default(now())
+  payments     Payment[]
+
+  @@index([userId])
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  debt      Debt     @relation(fields: [debtId], references: [id])
+  debtId    String
+  amount    Float
+  paidAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+  // The account debited and the expense generated by this payment (null when paid without an account).
+  // Deleting either one just unlinks the payment instead of leaving a dangling id.
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  expenseId String?
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([debtId])
+  @@index([expenseId])
+}
+
+model Budget {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  name       String
+  allocated  Float
   // Expense category this budget tracks; `spent` is computed from it, not stored
-  categoryId   String?
-  category     Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   // Legacy column, no longer read or written (kept to avoid a destructive migration)
-  spent        Float    @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  spent      Float     @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
 }
 
 model Goal {
-  id           String    @id @default(cuid())
-  user         User      @relation(fields: [userId], references: [id])
-  userId       String
-  title        String
-  description  String
-  targetAmount Float
-  currentAmount Float   @default(0)
-  targetDate   DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  title         String
+  description   String
+  targetAmount  Float
+  currentAmount Float    @default(0)
+  targetDate    DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Alert {
-  id        String    @id @default(cuid())
-  user      User      @relation(fields: [userId], references: [id])
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
   userId    String
   message   String
   type      String
-  read      Boolean   @default(false)
-  createdAt DateTime  @default(now())
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Automatic alerts look up "does this alert already exist?" by type
+  @@index([userId, type])
 }
 
 model Setting {
@@ -200,6 +231,8 @@ model CreditCard {
   updatedAt    DateTime       @updatedAt
   purchases    CardPurchase[]
   payments     CardPayment[]
+
+  @@index([userId])
 }
 
 model CardPayment {
@@ -213,14 +246,22 @@ model CardPayment {
   paidAt    DateTime   @default(now())
   createdAt DateTime   @default(now())
   accountId String?
+  account   Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
   expenseId String?
+  expense   Expense?   @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([cardId])
+  @@index([expenseId])
 }
 
 model RegistrationKey {
   id        String   @id @default(cuid())
-  code      String
+  code      String   @unique
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  @@index([active])
 }
 
 model CardPurchase {
@@ -238,4 +279,8 @@ model CardPurchase {
   paidInstallments Int        @default(0)
   date             DateTime
   createdAt        DateTime   @default(now())
+
+  @@index([userId, date])
+  @@index([cardId])
+  @@index([categoryId])
 }

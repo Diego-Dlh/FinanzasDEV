@@ -84,10 +84,14 @@ async function handleDelete(request: Request, { params }: Params) {
     const current = await tx.expense.findFirst({ where: { id, userId } });
     if (!current) throw new HttpError(404, 'No encontrado');
 
+    // Find the payments tied to this expense BEFORE deleting it: the foreign keys unlink
+    // them (SET NULL) the moment the expense row goes away.
+    const linkedPayment = await tx.payment.findFirst({ where: { expenseId: id, userId } });
+    const linkedCardPayment = await tx.cardPayment.findFirst({ where: { expenseId: id, userId } });
+
     await tx.expense.delete({ where: { id } });
 
     // Expense created by a debt payment: also restore the debt
-    const linkedPayment = await tx.payment.findFirst({ where: { expenseId: id, userId } });
     if (linkedPayment) {
       await tx.debt.updateMany({
         where: { id: linkedPayment.debtId, userId },
@@ -97,7 +101,6 @@ async function handleDelete(request: Request, { params }: Params) {
     }
 
     // Expense created by a card payment: also restore the card balance (in full, no clamping)
-    const linkedCardPayment = await tx.cardPayment.findFirst({ where: { expenseId: id, userId } });
     if (linkedCardPayment) {
       await tx.creditCard.updateMany({
         where: { id: linkedCardPayment.cardId, userId },

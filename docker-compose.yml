@@ -1,4 +1,7 @@
-version: '3.9'
+# Desarrollo local: solo la base de datos por defecto (la app se corre con `npm run dev`).
+#   docker compose up -d db            → Postgres en localhost:5433
+#   docker compose --profile app up    → además construye y levanta la app en :3000
+# Para producción usa docker-compose.prod.yml o docker-compose.homelab.yml.
 services:
   db:
     image: postgres:15-alpine
@@ -9,12 +12,17 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - '5433:5432'
+      - '127.0.0.1:5433:5432'
   web:
+    profiles: ['app']
     build: .
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/finanzasdev
-      JWT_SECRET: super_secure_change_me
+      # La app rechaza secretos de ejemplo: define uno real (openssl rand -base64 48) en tu shell o en .env
+      JWT_SECRET: ${JWT_SECRET:?define JWT_SECRET (openssl rand -base64 48)}
+      SEED_KEY: ${SEED_KEY:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - '3000:3000'
     depends_on:
